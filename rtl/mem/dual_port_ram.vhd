@@ -55,6 +55,7 @@ entity dual_port_ram is
   port (
     -- port A
     clock_a  : in std_logic;
+    cen_a    : in std_logic := '1';
     address_a : in unsigned(ilog2(LEN)-1 downto 0);
     data_a  : in std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '0');
     q_a : out std_logic_vector(DATA_WIDTH-1 downto 0);
@@ -62,6 +63,7 @@ entity dual_port_ram is
 
     -- port B
     clock_b  : in std_logic;
+    cen_b    : in std_logic := '1';
     address_b : in unsigned(ilog2(LEN)-1 downto 0);
     data_b  : in std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '0');
     q_b : out std_logic_vector(DATA_WIDTH-1 downto 0);
@@ -75,8 +77,8 @@ begin
   altsyncram_component : altsyncram
   generic map (
     address_reg_b                 => "CLOCK1",
-    clock_enable_input_a          => "BYPASS",
-    clock_enable_input_b          => "BYPASS",
+    clock_enable_input_a          => "NORMAL",
+    clock_enable_input_b          => "NORMAL",
     clock_enable_output_a         => "BYPASS",
     clock_enable_output_b         => "BYPASS",
     indata_reg_b                  => "CLOCK1",
@@ -105,6 +107,8 @@ begin
     address_b => std_logic_vector(address_b),
     clock0    => clock_a,
     clock1    => clock_b,
+    clocken0  => cen_a,
+    clocken1  => cen_b,
     data_a    => data_a,
     data_b    => data_b,
     wren_a    => wren_a,

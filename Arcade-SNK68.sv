@@ -385,6 +385,7 @@ wire pll_locked;
 
 wire clk_sys;
 reg  clk_4M,clk_6M,clk_18M,clk_upd;
+reg  cen_4M,cen_6M,cen_18M;
 
 wire clk_72M;
 
@@ -410,22 +411,25 @@ reg [15:0] clk_upd_count;
 always @ (posedge clk_sys) begin
 
     clk_4M <= ( clk4_count == 0 );
+    cen_4M <= ( clk4_count == 6'd17 );
 
     if ( clk4_count == 6'd17 ) begin
         clk4_count <= 6'd0;
     end else begin
         clk4_count <= clk4_count + 1;
     end
-    
+
     clk_6M <= ( clk6_count == 0 );
+    cen_6M <= ( clk6_count == 6'd11 );
 
     if ( clk6_count == 6'd11 ) begin
         clk6_count <= 6'd0;
     end else begin
         clk6_count <= clk6_count + 1;
     end
-    
+
     clk_18M <= ( clk18_count == 0 );
+    cen_18M <= ( clk18_count == 6'd3 );
 
     if ( clk18_count == 6'd3 ) begin
         clk18_count <= 6'd0;
@@ -444,8 +448,13 @@ always @ (posedge clk_sys) begin
     end    
 end
 
-wire    reset;
-assign  reset = RESET | key_reset | status[0] ; 
+reg [1:0] reset_sync = 2'b11;
+
+always @ (posedge clk_sys) begin
+    reset_sync <= { reset_sync[0], RESET };
+end
+
+wire    reset = reset_sync[1] | key_reset | status[0];
 
 //////////////////////////////////////////////////////////////////
 wire rotate_ccw = 0;
@@ -469,14 +478,16 @@ reg hbl_delay, vbl_delay;
 //assign  hbl_delay = hbl ;
 //assign  vbl_delay = vbl ;
 
-always @ ( posedge clk_6M ) begin
-    hbl_delay <= hbl ;
-    vbl_delay <= vbl ;
+always @ ( posedge clk_sys ) begin
+    if ( cen_6M == 1 ) begin
+        hbl_delay <= hbl ;
+        vbl_delay <= vbl ;
+    end
 end
 
 video_timing video_timing (
-    .clk(clk_6M),
-    .clk_pix(1'b1),
+    .clk(clk_sys),
+    .clk_pix(cen_6M),
     .reset(reset),
     .hc(hc),
     .vc(vc),
@@ -1037,19 +1048,23 @@ reg sp_enable;
 
 // fx68k clock generation
 reg fx68_phi1;
+reg fx68_phi1_en;
+reg fx68_phi2_en;
 
 always @(posedge clk_sys) begin
     if ( clk_18M == 1 ) begin
         fx68_phi1 <= ~fx68_phi1;
     end
+    fx68_phi1_en <= ( clk18_count == 6'd3 ) &  fx68_phi1;
+    fx68_phi2_en <= ( clk18_count == 6'd3 ) & ~fx68_phi1;
 end
 
 fx68k fx68k (
     // input
-    .clk( clk_18M ),
+    .clk( clk_sys ),
     .HALTn(1'b1),
-    .enPhi1(fx68_phi1),
-    .enPhi2(~fx68_phi1),
+    .enPhi1(fx68_phi1_en),
+    .enPhi2(fx68_phi2_en),
 
     .extReset(reset),
     .pwrUp(reset),
@@ -1287,7 +1302,8 @@ wire z80_ioctl_wr = rom_download & ioctl_wr & (ioctl_addr >= 24'h080000) & (ioct
 
 // main 68k ram high    
 dual_port_ram #(.LEN(8192)) ram8kx8_H (
-    .clock_a ( clk_18M ),
+    .clock_a ( clk_sys ),
+    .cen_a ( cen_18M ),
     .address_a ( m68k_a[13:1] ),
     .wren_a ( !m68k_rw & m68k_ram_cs & !m68k_uds_n ),
     .data_a ( m68k_dout[15:8]  ),
@@ -1296,7 +1312,8 @@ dual_port_ram #(.LEN(8192)) ram8kx8_H (
 
 // main 68k ram low     
 dual_port_ram #(.LEN(8192)) ram8kx8_L (
-    .clock_a ( clk_18M ),
+    .clock_a ( clk_sys ),
+    .cen_a ( cen_18M ),
     .address_a ( m68k_a[13:1] ),
     .wren_a ( !m68k_rw & m68k_ram_cs & !m68k_lds_n ),
     .data_a ( m68k_dout[7:0]  ),
@@ -1309,7 +1326,8 @@ wire [15:0] sprite_ram_dout /* synthesis keep */;
 // main 68k sprite ram high  
 // 2kx16
 dual_port_ram #(.LEN(16384)) sprite_ram_H (
-    .clock_a ( clk_18M ),
+    .clock_a ( clk_sys ),
+    .cen_a ( cen_18M ),
     .address_a ( m68k_a[14:1] ),
     .wren_a ( !m68k_rw & m68k_spr_cs & !m68k_uds_n ),
     .data_a ( m68k_dout[15:8]  ),
@@ -1324,7 +1342,8 @@ dual_port_ram #(.LEN(16384)) sprite_ram_H (
 
 // main 68k sprite ram low     
 dual_port_ram #(.LEN(16384)) sprite_ram_L (
-    .clock_a ( clk_18M ),
+    .clock_a ( clk_sys ),
+    .cen_a ( cen_18M ),
     .address_a ( m68k_a[14:1] ),
     .wren_a ( !m68k_rw & m68k_spr_cs & !m68k_lds_n ),
     .data_a ( m68k_dout[7:0]  ),
@@ -1345,7 +1364,8 @@ wire [15:0] m68k_fg_ram_dout;
 
 // foreground high   
 dual_port_ram #(.LEN(2048)) ram_fg_h (
-    .clock_a ( clk_18M ),
+    .clock_a ( clk_sys ),
+    .cen_a ( cen_18M ),
     .address_a ( m68k_a[11:1] ),
     .wren_a ( !m68k_rw & m68k_fg_ram_cs & !m68k_uds_n ), // can write to m68k_fg_mirror_cs but not read
     .data_a ( m68k_dout[15:8]  ),
@@ -1361,7 +1381,8 @@ dual_port_ram #(.LEN(2048)) ram_fg_h (
 
 // foreground low
 dual_port_ram #(.LEN(2048)) ram_fg_l (
-    .clock_a ( clk_18M ),
+    .clock_a ( clk_sys ),
+    .cen_a ( cen_18M ),
     .address_a ( m68k_a[11:1] ),
     .wren_a ( !m68k_rw & m68k_fg_ram_cs & !m68k_lds_n ),
     .data_a ( m68k_dout[7:0]  ),
@@ -1391,7 +1412,8 @@ wire [4:0] b_pal = { tile_pal_dout[3:0]  , tile_pal_dout[12] };
     
 // tile palette high   
 dual_port_ram #(.LEN(2048)) tile_pal_h (
-    .clock_a ( clk_18M ),
+    .clock_a ( clk_sys ),
+    .cen_a ( cen_18M ),
     .address_a ( m68k_a[11:1] ),
     .wren_a ( !m68k_rw & m68k_pal_cs & !m68k_uds_n ),
     .data_a ( m68k_dout[15:8]  ),
@@ -1406,7 +1428,8 @@ dual_port_ram #(.LEN(2048)) tile_pal_h (
 
 //  tile palette low
 dual_port_ram #(.LEN(2048)) tile_pal_l (
-    .clock_a ( clk_18M ),
+    .clock_a ( clk_sys ),
+    .cen_a ( cen_18M ),
     .address_a ( m68k_a[11:1] ),
     .wren_a ( !m68k_rw & m68k_pal_cs & !m68k_lds_n ),
     .data_a ( m68k_dout[7:0]  ),
@@ -1421,7 +1444,8 @@ dual_port_ram #(.LEN(2048)) tile_pal_l (
     
 //z80 program rom    
 dual_port_ram #(.LEN(65536)) z80_rom (
-    .clock_a ( clk_4M ),
+    .clock_a ( clk_sys ),
+    .cen_a ( cen_4M ),
     .address_a ( z80_addr[15:0] ),
     .wren_a ( 1'b0 ),
     .data_a ( ),
@@ -1436,7 +1460,8 @@ dual_port_ram #(.LEN(65536)) z80_rom (
     
 // z80 ram 
 dual_port_ram #(.LEN(2048)) z80_ram (
-    .clock_b ( clk_4M ), 
+    .clock_b ( clk_sys ),
+    .cen_b ( cen_4M ),
     .address_b ( z80_addr[10:0] ),
     .wren_b ( z80_ram_cs & ~z80_wr_n ),
     .data_b ( z80_dout ),
