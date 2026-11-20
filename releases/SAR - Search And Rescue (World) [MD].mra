@@ -2,32 +2,34 @@
     <name>SAR - Search And Rescue (World)</name>
     <setname>searchar</setname>
     <rbf>SNK68MD</rbf>
-    <mameversion>0245</mameversion>
+    <mameversion>0288</mameversion>
     <year>1989</year>
     <manufacturer>SNK</manufacturer>
-    <region>World</region>
+    <players>2</players>
+    <joystick>Rotary</joystick>
     <rotation>vertical (cw)</rotation>
+    <region>World</region>
 
     <switches default="ff,ff">
         <!-- DSW1 -->
-        <dip name="Monitor Screen" bits="7" ids="Invert,Normal"/>
-        <dip name="Bonus" bits="6" ids="Every,Second Only"/>
-        <dip name="Play Pricing" bits="4,5" ids="4/1-1/6,2/1-1/3,3/1-1/5,1/1-1/2"/>
-        <dip name="Hero Count" bits="2,3" ids="5,2,4,3"/>
-        <dip name="Unknown" bits="1" ids="On,Off"/>
-        <dip name="Control Type" bits="0" ids="8-Way,Rotary"/>
+        <dip name="Joystick" bits="0" ids="Rotary Joystick,Standard Joystick" values="1,0"/>
+        <dip name="Unknown" bits="1" ids="Off,On" values="1,0"/>
+        <dip name="Lives" bits="2,3" ids="2,3,4,5" values="1,3,2,0"/>
+        <dip name="Coinage" bits="4,5" ids="A 4/1 B 1/6,A 3/1 B 1/5,A 2/1 B 1/3,A 1/1 B 1/2" values="0,2,1,3"/>
+        <dip name="Bonus Occur" bits="6" ids="1st+2nd only,1st+every 2nd" values="1,0"/>
+        <dip name="Flip Screen" bits="7" ids="Off,On" values="1,0"/>
         <!-- DSW2 -->
-        <dip name="Difficulty" bits="14,15" ids="Hardest,Easy,Hard,Normal"/>
-        <dip name="Game Mode" bits="12,13" ids="Stop Video,Demo Sound Off,Never Finish,Demo Sound On"/>
-        <dip name="Extend" bits="10,11" ids="None,70/140K,90/180K,50/100K"/>
-        <dip name="Continue" bits="9" ids="No,Yes"/>
-        <dip name="Test Mode" bits="8" ids="Manual Test,Normal Game"/>
+        <dip name="Service Mode" bits="8" ids="Off,On" values="1,0"/>
+        <dip name="Allow Continue" bits="9" ids="No,Yes" values="0,1"/>
+        <dip name="Bonus Life" bits="10,11" ids="50k 100k,70k 140k,90k 180k,None" values="3,1,2,0"/>
+        <dip name="Game Mode" bits="12,13" ids="Demo Sounds Off,Demo Sounds On,Freeze,Inf Lives (Cheat)" values="1,3,0,2"/>
+        <dip name="Difficulty" bits="14,15" ids="Easy,Normal,Hard,Hardest" values="1,3,2,0"/>
     </switches>
 
-    <buttons names="Fire/Power Up,Jump,-,P1 Start,P2 Start,Coin A,Coin B,Pause,Rotate CW,Rotate CCW" default="A,B,X,Y,R,L,Start,Select,R1,L1"/>
+    <buttons names="Fire/Power,Jump,-,Rotate CW,Rotate CCW,Start,Coin,Pause,Save States" default="A,B,X,Y,Start,Select,R,L"/>
 
     <rom index="1">
-        <part>00</part>
+        <part>00 01</part>
     </rom>
 
     <rom index="0" zip="searchar.zip" md5="None">
@@ -66,4 +68,13 @@
         </interleave>
         <!-- Total 0x400000 bytes - 4096 kBytes -->
     </rom>
+
+    <!-- hiscore: address[4] length[2] start end, MAME 0.288 plugins/hiscore/hiscore.dat -->
+    <rom index="3" md5="none">
+        <part>
+            00 04 37 B6 00 50 00 1F
+            00 04 01 18 00 03 00 01
+        </part>
+    </rom>
+    <nvram index="4" size="83"/>
 </misterromdescription>

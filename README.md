@@ -1,9 +1,9 @@
 
-# SNK M68000 (Ikari III) FPGA Implementation
+# SNK M68000 (Ikari III) FPGA Implementation — SNK68MD
 
 FPGA compatible core of SNK M68000 (Ikari III based) arcade hardware for [**MiSTerFPGA**](https://github.com/MiSTer-devel/Main_MiSTer/wiki) written by [**Erin Olafson**]. FPGA implementation has been verified against schematics for Ikari III (A7007). PCB measurements taken from Datsugoku: Prisoners of War (A7008), Street Smart (A8007), and Ikari III: The Rescue (A7007).
 
-Ikari III PCB donated by [**atrac17**](https://github.com/atrac17) / [**DJ Hard Rich**](https://twitter.com/djhardrich) and verified by [**Erin Olafson**]. Other SNK68K PCB verification done by [**atrac17**](https://github.com/atrac17). The intent is for this core to be a 1:1 playable implementation of SNK M68000 (Ikari III) arcade hardware. Currently in **beta state**, this core is in active development with assistance from [**atrac17**](https://github.com/atrac17).
+Ikari III PCB donated by [**atrac17**](https://github.com/atrac17) / [**DJ Hard Rich**](https://twitter.com/djhardrich) and verified by [**Erin Olafson**]. Other SNK68K PCB verification done by [**atrac17**](https://github.com/atrac17). The intent is for this core to be a 1:1 playable implementation of SNK M68000 (Ikari III) arcade hardware. Currently in **beta state**, this core is in active development with assistance from [**atrac17**](https://github.com/atrac17). Maintenance and miscellaneous quality of life features (SNK68MD) added by TheJesusfish.
 
 <br>
 <p align="center">
@@ -12,22 +12,30 @@ Ikari III PCB donated by [**atrac17**](https://github.com/atrac17) / [**DJ Hard 
 
 ## Supported Games
 
-| Title | PCB<br>Number | Status  | Released | ROM Set  |
-|-------|---------------|---------|----------|----------|
-| [**脱獄: Prisoners of War**](https://en.wikipedia.org/wiki/P.O.W.:_Prisoners_of_War)<br>P.O.W.: Prisoners of War | A7008         | Implemented | Yes | .245 merged |
-| [**怒III**](https://en.wikipedia.org/wiki/Ikari_III:_The_Rescue)<br>Ikari III: The Rescue                        | A7007         | Implemented | Yes | .245 merged |
-| [**Street Smart**](https://en.wikipedia.org/wiki/Street_Smart_(video_game))                                      | A7008 / A8007 | Implemented | Yes   | .245 merged |
-| [**SAR: Search and Rescue**](http://snk.fandom.com/wiki/SAR:_Search_and_Rescue)                                  | A8007         | Implemented | Yes   | .245 merged |
+| Title | PCB<br>Number | Status  | Released | MAME 0.288 sets |
+|-------|---------------|---------|----------|-----------------|
+| [**脱獄: Prisoners of War**](https://en.wikipedia.org/wiki/P.O.W.:_Prisoners_of_War)<br>P.O.W.: Prisoners of War | A7008         | Implemented | Yes | **pow**, powj, powa |
+| [**怒III**](https://en.wikipedia.org/wiki/Ikari_III:_The_Rescue)<br>Ikari III: The Rescue                        | A7007         | Implemented | Yes | **ikari3**, ikari3w, ikari3u, ikari3j, ikari3k |
+| [**Street Smart**](https://en.wikipedia.org/wiki/Street_Smart_(video_game))                                      | A7008 / A8007 | Implemented | Yes | **streetsm**, streetsm1, streetsmw, streetsmj, streetsmwbl |
+| [**SAR: Search and Rescue**](http://snk.fandom.com/wiki/SAR:_Search_and_Rescue)                                  | A8007         | Implemented | Yes | **searchar**, searcharu, searcharj |
+
+Parents in bold are in `releases/`, clones in `releases/_alternatives/`. Not supported: powbl (bootleg of P.O.W. with an
+MSM5205 in place of the uPD7759).
 
 ## External Modules
 
 |Name| Purpose | Author |
 |----|---------|--------|
-| [**fx68k**](https://github.com/ijor/fx68k)                      | [**Motorola 68000 CPU**](https://en.wikipedia.org/wiki/Motorola_68000) | Jorge Cwik     |
-| [**t80**](https://opencores.org/projects/t80)                   | [**Zilog Z80 CPU**](https://en.wikipedia.org/wiki/Zilog_Z80)           | Daniel Wallner |
-| [**jtopl2**](https://github.com/jotego/jtopl)                   | [**Yamaha OPL 2**](https://en.wikipedia.org/wiki/Yamaha_OPL#OPL2)      | Jose Tejada    |
-| [**jt7759**](https://github.com/jotego/jt7759)                  | [**NEC uPD7759**](https://github.com/jotego/jt7759)                    | Jose Tejada    |
-| [**yc_out**](https://github.com/MikeS11/MiSTerFPGA_YC_Encoder)  | [**Y/C Video Module**](https://en.wikipedia.org/wiki/S-Video)          | Mike Simone    |
+| [**fx68k**](https://github.com/ijor/fx68k) @ `0602ee4`                                                         | [**Motorola 68000 CPU**](https://en.wikipedia.org/wiki/Motorola_68000) | Jorge Cwik |
+| [**T80**](https://github.com/MiSTer-devel/NeoGeo_MiSTer/tree/master/rtl/cpu/T80) (NeoGeo_MiSTer `rtl/cpu/T80` @ `90a8350`) | [**Zilog Z80 CPU**](https://en.wikipedia.org/wiki/Zilog_Z80) | Daniel Wallner / MikeJ / Sorgelig |
+| [**jtopl**](https://github.com/jotego/jtopl) @ `f96ff3e`                                                      | [**Yamaha OPL 2**](https://en.wikipedia.org/wiki/Yamaha_OPL#OPL2)      | Jose Tejada |
+| [**jt7759**](https://github.com/jotego/jt7759) @ `c23dc9f`                                                    | [**NEC uPD7759**](https://github.com/jotego/jt7759)                    | Jose Tejada |
+| [**Template_MiSTer sys/**](https://github.com/MiSTer-devel/Template_MiSTer) @ `e901a9f` (incl. yc_out)        | MiSTer framework                                                       | MiSTer-devel |
+| [**Arcade-TaitoF2_MiSTer**](https://github.com/MiSTer-devel/Arcade-TaitoF2_MiSTer) @ `9438df9` save-state code (`rtl/savestate/`: ddram, memory_stream, savestates, savestate_ui) | Save states | Martin Donlon |
+| [**Pause_MiSTer**](https://github.com/JimmyStones/Pause_MiSTer) (`rtl/pause.v`, va7deo modified)              | Pause handling                                                          | Jim Gregory |
+
+The save-state controller (`rtl/snk68_ss.sv`) follows the TaitoF2 design; the high-score keeper (`rtl/hiscore.sv`) follows the
+Arcade-RaizingMD_MiSTer / Arcade-IGSPGM_MiSTer NVRAM flow and uses MAME's `hiscore.dat`.
 
 # Known Issues / Tasks
 
@@ -102,6 +110,28 @@ SNKI/O   | A7007 (IK3) / A8007 (SAR) | [**SNK I/O**](https://github.com/va7deo/S
 
 # Core Features
 
+### Save States
+
+- Hold **L** on either pad: **Down** saves, **Up** restores, **Left / Right** change the slot (4 slots). Keyboard: Alt+F1 saves,
+  F1 restores. The OSD has Savestate Slot, Autoincrement Slot, Save state and Restore state.
+- Saved: 68000 registers, work, sprite, text and palette RAM, Z80 registers and RAM, board latches, the YM3812 registers and the
+  rotary positions. A sample the uPD7759 is playing at the moment of the save is not restored.
+
+### High Scores
+
+- High-score tables (MAME `hiscore.dat`) are written back after the game has set up its table and saved when the OSD opens
+  (OSD "Autosave Hiscores", default On) or with OSD "Save Hiscores".
+
+### DIP Switches
+
+- DIP switches follow MAME 0.288. A DIP change in the OSD does not reset the game; it applies at "Reset to apply" (or the next
+  reset).
+
+### Orientation
+
+- SAR: Search and Rescue starts vertical (OSD Video Settings, Orientation). The Flip Screen DIP turns the picture in the core's
+  own raster, on HDMI and analog.
+
 ### Rotary Joystick Support
 
 - Rotary control is supported via gamepad or firmware written by [**atrac17**](https://github.com/atrac17) / [**DJ Hard Rich**](https://twitter.com/djhardrich) for [**LS-30 functionality using an RP2040**](https://github.com/va7deo/SNK68/tree/main/dev/rp2040). Latency verification done by [**misteraddons**](https://github.com/misteraddons), for more information click [**here**](https://rpubs.com/misteraddons/inputlatency).
@@ -132,7 +162,18 @@ LS-30 Rotary Encoder | RP2040 | Wired USB | 1ms | 2241 | 95.52% | 0.747 ms | 2e8
 
 <br>
 
-- Service menu is accessed by holding the F2 key on boot. Service dip is functional for Ikari III. P.O.W. and SAR: Search and Rescue require holding the F2 key on boot. Street Smarts requires the service dip to be toggled before resetting the core and holding F2.
+- Each pad drives its own player: pad 1 Start / Select are 1P Start / Coin 1, pad 2 Start / Select are 2P Start / Coin 2, and all
+  player 2 controls come from pad 2. Default pad buttons (MRA): A, B, X = the game's A, B, C buttons, Start = Start,
+  Select = Coin, R = Pause, L = Save states (hold); rotary sets add Rotate CW = Y on Ikari III (Rotate CCW unassigned) and Rotate CW = X, Rotate CCW = Y on SAR.
+
+| Game | A | B | C | Button combinations (from the game's documents) |
+|------|---|---|---|-------------------------------------------------|
+| Ikari III | Kick | Jump | Punch | A+B jump kick; B+C back punch (with knife: throw knife; with machine gun: throw gun); machine gun: A / C shoot; grenade: A / C throw. Other items: any button throws them. |
+| P.O.W. | Kick (with gun: shoot) | Jump | Punch (with knife: throw knife; with gun: hit with gun) | A+B jump kick; B+C back punch; A+C head butt |
+| Street Smart | Kick | Jump | Punch | A+B somersault; A+C jump kick |
+| SAR | Fire / Power | Jump | — | hold A: power-up techniques; hold B and press A: jump while firing |
+
+- Service menu is accessed with the Service Mode DIP (Manual Test) or by holding the F2 key on boot.
 
 <br>
 

@@ -1,29 +1,33 @@
 <misterromdescription>
     <name>P.O.W. - Prisoners of War (US Version 1, Mask ROM Sprites)</name>
     <setname>powa</setname>
+    <parent>pow</parent>
     <rbf>SNK68MD</rbf>
-    <mameversion>0245</mameversion>
+    <mameversion>0288</mameversion>
     <year>1988</year>
     <manufacturer>SNK</manufacturer>
+    <players>2</players>
+    <joystick>8-Way</joystick>
+    <rotation>horizontal</rotation>
     <region>US</region>
 
-    <switches default="ff,ff">
+    <switches default="ef,ff">
         <!-- DSW1 -->
-        <dip name="Monitor Screen" bits="7" ids="Invert,Normal"/>
-        <dip name="Unknown" bits="6" ids="On,Off"/>
-        <dip name="Bonus Occurence" bits="5" ids="Every,Second"/>
-        <dip name="Hero Count" bits="4" ids="Three,Two"/>
-        <dip name="Play Pricing 1" bits="2,3" ids="4/1,2/1,3/1,1/1"/>
-        <dip name="Play Pricing 2" bits="0,1" ids="1/4,1/2,1/3,1/1"/>
+        <dip name="Coin B" bits="0,1" ids="1 Coin/1 Credit,1 Coin/2 Credits,1 Coin/3 Credits,1 Coin/4 Credits" values="3,1,2,0"/>
+        <dip name="Coin A" bits="2,3" ids="4 Coins/1 Credit,3 Coins/1 Credit,2 Coins/1 Credit,1 Coin/1 Credit" values="0,2,1,3"/>
+        <dip name="Lives" bits="4" ids="2,3" values="1,0"/>
+        <dip name="Bonus Occur" bits="5" ids="1st+2nd only,1st+every 2nd" values="1,0"/>
+        <dip name="Language" bits="6" ids="English,Japanese" values="1,0"/>
+        <dip name="Flip Screen" bits="7" ids="Off,On" values="1,0"/>
         <!-- DSW2 -->
-        <dip name="Difficulty" bits="14,15" ids="Hardest,Easy,Hard,Standard"/>
-        <dip name="Game Mode" bits="12,13" ids="Stop Video,Demo Sound Off,Never Finish,Demo Sound On"/>
-        <dip name="Extend" bits="10,11" ids="None,40/100K,60/150K,20/50K"/>
-        <dip name="Continue" bits="9" ids="No,Yes"/>
-        <dip name="Test Mode" bits="8" ids="Manual Test,Normal Game"/>
+        <dip name="Service Mode" bits="8" ids="Off,On" values="1,0"/>
+        <dip name="Allow Continue" bits="9" ids="No,Yes" values="0,1"/>
+        <dip name="Bonus Life" bits="10,11" ids="20k 50k,40k 100k,60k 150k,None" values="3,1,2,0"/>
+        <dip name="Game Mode" bits="12,13" ids="Demo Sounds Off,Demo Sounds On,Freeze,Inf Lives (Cheat)" values="1,3,0,2"/>
+        <dip name="Difficulty" bits="14,15" ids="Easy,Normal,Hard,Hardest" values="1,3,2,0"/>
     </switches>
 
-    <buttons names="Kick/Shoot Gun,Jump,Punch/Butt Stroke,P1 Start,P2 Start,Coin A,Coin B,Pause" default="A,B,X,Y,R,L,Start"/>
+    <buttons names="Kick,Jump,Punch,-,-,Start,Coin,Pause,Save States" default="A,B,X,Start,Select,R,L"/>
 
     <rom index="1">
         <part>01</part>
@@ -60,4 +64,14 @@
         <part name="pal20l10.a6" crc="c3d9e729"/>
         <!-- Total 0x3800CC bytes - 3584 kBytes -->
     </rom>
+
+    <!-- hiscore: address[4] length[2] start end, MAME 0.288 plugins/hiscore/hiscore.dat -->
+    <rom index="3" md5="none">
+        <part>
+            00 04 3E 8E 00 04 00 00
+            00 04 19 10 00 02 00 01
+            00 04 19 12 00 4E 00 00
+        </part>
+    </rom>
+    <nvram index="4" size="84"/>
 </misterromdescription>

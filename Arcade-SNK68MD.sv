@@ -26,7 +26,7 @@ module emu
 ///////// Default values for ports not used in this core /////////
 
 assign ADC_BUS  = 'Z;
-assign USER_OUT = 0;
+assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 //assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
@@ -53,10 +53,12 @@ assign m68k_a[0] = 0;
 // 0         1         2         3          4         5         6   
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X   XXXXXX        XXXXX XXXXXXXX      XXXX                       
+// X  XXX XXXX       XXXX   XXXXXXXX                        XXXXXXXX
+// 64-70: save states, hiscores
 
 wire [1:0]  aspect_ratio = status[9:8];
-wire        orientation = ~status[3];
+// vertical games (index-1 flag) rotate unless the OSD selects Horz
+wire        orientation = ~vert_game | status[3];
 wire [2:0]  scan_lines = status[6:4];
 
 wire [3:0]  hs_offset = status[27:24];
@@ -74,47 +76,61 @@ assign VIDEO_ARY = (!aspect_ratio) ? (orientation  ? 8'd7 : 8'd8) : 12'd0;
 
 `include "build_id.v" 
 localparam CONF_STR = {
-    "SNK68;;",
+    "SNK68MD;SS3E000000:400000;",
     "-;",
     "P1,Video Settings;",
     "P1-;",
-    "P1O89,Aspect Ratio,Original,Full Screen,[ARC1],[ARC2];",
-    "P1O3,Orientation,Horz,Vert;",
+    "P1O[9:8],Aspect Ratio,Original,Full Screen,[ARC1],[ARC2];",
+    "H2P1O[3],Orientation,Vert,Horz;",
     "P1-;",
-    "P1O46,Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%,CRT 100%;",
-    "P1OA,Force Scandoubler,Off,On;",
+    "P1O[6:4],Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%,CRT 100%;",
+    "P1O[10],Force Scandoubler,Off,On;",
     "P1-;",
-    "P1O7,Video Mode,NTSC,PAL;",
+    "P1O[27:24],H-sync Pos Adj,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
+    "P1O[31:28],V-sync Pos Adj,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
     "P1-;",
-    "P1OOR,H-sync Pos Adj,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
-    "P1OSV,V-sync Pos Adj,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
-    "P1-;",
-    "P1oOR,H-sync Width Adj,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
-    "P1oSV,V-sync Width Adj,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
+    "P1O[59:56],H-sync Width Adj,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
+    "P1O[63:60],V-sync Width Adj,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
     "P1-;",
     "P2,Pause Options;",
     "P2-;",
-    "P2OK,Pause when OSD is open,Off,On;",
-    "P2OL,Dim video after 10s,Off,On;",
+    "P2O[20],Pause when OSD is open,Off,On;",
+    "P2O[21],Dim video after 10s,Off,On;",
     "-;",
     "P3,Debug Settings;",
     "P3-;",
-    "P3OI,P1 Rotary Type,Gamepad,LS-30;",
-    "P3OJ,P2 Rotary Type,Gamepad,LS-30;",
-    //"P3-;",
-    //"P3o5,Text Layer,On,Off;",
-    //"P3o6,Foreground Layer,On,Off;",
-    //"P3o7,Background Layer,On,Off;",
-    //"P3o8,Sprite Layer,On,Off;",
+    "P3O[18],P1 Rotary Type,Gamepad,LS-30;",
+    "P3O[19],P2 Rotary Type,Gamepad,LS-30;",
     "P3-;",
+    "-;",
+    "O[65:64],Savestate Slot,1,2,3,4;",
+    "O[66],Autoincrement Slot,Off,On;",
+    "R[67],Save state (Alt-F1);",
+    "R[68],Restore state (F1);",
+    "-;",
+    "H1O[69],Autosave Hiscores,On,Off;",
+    "H1T[70],Save Hiscores;",
+    "H1-;",
     "DIP;",
     "-;",
-    "R0,Reset;",
-    "J1,Button 1,Button 2,Button 3,Start,Coin,Pause;",
-    "jn,A,B,X,R,L,Start;",           // name mapping
+    "R[0],Reset;",
+    "I,",
+    "Hold L: Up=Load|Down=Save|Lt/Rt=Slot,",
+    "Active Slot 1,",
+    "Active Slot 2,",
+    "Active Slot 3,",
+    "Active Slot 4,",
+    "Save to state 1,",
+    "Restore state 1,",
+    "Save to state 2,",
+    "Restore state 2,",
+    "Save to state 3,",
+    "Restore state 3,",
+    "Save to state 4,",
+    "Restore state 4;",
+    "v,1;",
     "V,v",`BUILD_DATE
 };
-
 
 wire hps_forced_scandoubler;
 wire forced_scandoubler = hps_forced_scandoubler | status[10];
@@ -123,8 +139,9 @@ wire  [1:0] buttons;
 wire [127:0] status;
 wire [10:0] ps2_key;
 wire [31:0] joy0_full, joy1_full;
-wire [15:0] joy0 = joy0_full[15:0];
-wire [15:0] joy1 = joy1_full[15:0];
+// a pad holding L (save states) gives its directions to the save-state UI only
+wire [15:0] joy0 = joy0_full[12] ? 16'd0 : joy0_full[15:0];
+wire [15:0] joy1 = joy1_full[12] ? 16'd0 : joy1_full[15:0];
 
 hps_io #(.CONF_STR(CONF_STR)) hps_io
 (
@@ -134,7 +151,11 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
     .buttons(buttons),
     .ps2_key(ps2_key),
     .status(status),
-    .status_menumask({15'd0, direct_video}),
+    .status_menumask({13'd0, ~vert_game, ~hs_has_entries, direct_video}),
+    .status_in({status[127:66], ss_slot, status[63:0]}),
+    .status_set(ss_status_set),
+    .info_req(ss_info_req),
+    .info(ss_info),
     .forced_scandoubler(hps_forced_scandoubler),
     .gamma_bus(gamma_bus),
     .direct_video(direct_video),
@@ -148,6 +169,8 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
     .ioctl_din(ioctl_din),
     .ioctl_index(ioctl_index),
     .ioctl_wait(ioctl_wait),
+    .ioctl_upload_req(ioctl_upload_req),
+    .ioctl_upload_index(8'd4),
 
     .joystick_0(joy0_full),
     .joystick_1(joy1_full)
@@ -163,6 +186,15 @@ always @(posedge clk_sys) begin
     end
 end
 
+// the game reads DIP copies taken while reset is held (OSD changes apply at the next reset)
+reg [7:0] sw0_l, sw1_l;
+always @(posedge clk_sys) begin
+    if (reset) begin
+        sw0_l <= sw[0];
+        sw1_l <= sw[1];
+    end
+end
+
 wire        direct_video;
 
 wire        ioctl_download;
@@ -173,13 +205,19 @@ wire        ioctl_wr;
 wire [15:0] ioctl_index;
 wire [26:0] ioctl_addr;
 wire  [7:0] ioctl_dout;
-wire  [7:0] ioctl_din = 8'd0;
+wire  [7:0] ioctl_din;
 
 reg   [3:0] pcb;
+reg         vert_game;
 
+// index 1: byte 0 = board type, byte 1 bit 0 = vertical game
 always @(posedge clk_sys) begin
     if (ioctl_wr && (ioctl_index==1)) begin
-        pcb <= ioctl_dout[3:0];
+        if (ioctl_addr == 0) begin
+            pcb <= ioctl_dout[3:0];
+            vert_game <= 0;
+        end
+        if (ioctl_addr == 1) vert_game <= ioctl_dout[0];
     end
 end
 
@@ -203,8 +241,8 @@ always @ (posedge clk_sys ) begin
         
         coin <= { { 2 { invert_mask ^ ~{ 2'b0, coin_b, coin_a, 2'b0, key_test, key_service } } } };
         
-        dsw1 <=  ~{ { 2 { sw[0] } } };
-        dsw2 <=  ~{ { 2 { sw[1] } } };
+        dsw1 <=  ~{ { 2 { sw0_l } } };
+        dsw2 <=  ~{ { 2 { sw1_l } } };
     end else begin
         p1   <= ~{ { 2 { start1, p1_buttons[2:0], p1_right, p1_left, p1_down, p1_up} } };
 
@@ -212,11 +250,12 @@ always @ (posedge clk_sys ) begin
 
         coin <= ~{ { 2 { 2'b0, coin_b, coin_a, 2'b0, key_test, key_service } } };
 
-        dsw1 <=  ~{ { 2 { sw[0] } } };
-        dsw2 <=  ~{ { 2 { sw[1] } } };
+        dsw1 <=  ~{ { 2 { sw0_l } } };
+        dsw2 <=  ~{ { 2 { sw1_l } } };
     end
 end
 
+// pad bits: 4-6 buttons 1-3, 7 rotate CW, 8 rotate CCW, 9 start, 10 coin, 11 pause, 12 save states (L)
 wire        p1_right   = joy0[0] | key_p1_right;
 wire        p1_left    = joy0[1] | key_p1_left;
 wire        p1_down    = joy0[2] | key_p1_down;
@@ -229,11 +268,11 @@ wire        p2_down    = joy1[2] | key_p2_down;
 wire        p2_up      = joy1[3] | key_p2_up;
 wire [2:0]  p2_buttons = joy1[6:4] | {key_p2_c, key_p2_b, key_p2_a};
 
-wire        start1  = joy0[7]  | joy1[7]  | key_start_1p;
-wire        start2  = joy0[8]  | joy1[8]  | key_start_2p;
-wire        coin_a  = joy0[9]  | joy1[9]  | key_coin_a;
-wire        coin_b  = joy0[10] | joy1[10] | key_coin_b;
-wire        b_pause = joy0[11] | key_pause;
+wire        start1  = joy0[9]  | key_start_1p;
+wire        start2  = joy1[9]  | key_start_2p;
+wire        coin_a  = joy0[10] | key_coin_a;
+wire        coin_b  = joy1[10] | key_coin_b;
+wire        b_pause = joy0[11] | joy1[11] | key_pause;
 wire        service = key_test;
 
 // Keyboard handler
@@ -330,15 +369,18 @@ reg last_rot2_ccw ;
 wire p1_rotary_controller_type = status[18];
 wire p2_rotary_controller_type = status[19];
 
-wire rot1_cw  = joy0[12] | key_ls30_p1[0];
-wire rot1_ccw = joy0[13] | key_ls30_p1[1];
-wire rot2_cw  = joy1[12] | key_ls30_p2[0];
-wire rot2_ccw = joy1[13] | key_ls30_p2[1];
+wire rot1_cw  = joy0[7] | key_ls30_p1[0];
+wire rot1_ccw = joy0[8] | key_ls30_p1[1];
+wire rot2_cw  = joy1[7] | key_ls30_p2[0];
+wire rot2_ccw = joy1[8] | key_ls30_p2[1];
 
 always @ (posedge clk_sys) begin
     if ( reset == 1 ) begin
         rotary1 <= 12'h1 ;
         rotary2 <= 12'h1 ;
+    end else if ( ss_board_load ) begin
+        rotary1 <= ss_board[35:24];
+        rotary2 <= ss_board[47:36];
     end else begin
         if ( p1_rotary_controller_type == 0 ) begin
             // did the button state change?
@@ -433,7 +475,7 @@ always @ (posedge clk_sys) begin
 
     if ( clk18_count == 6'd3 ) begin
         clk18_count <= 6'd0;
-    end else if ( pause_cpu == 0 ) begin
+    end else if ( run_68k ) begin
         clk18_count <= clk18_count + 1;
     end
 
@@ -443,10 +485,15 @@ always @ (posedge clk_sys) begin
     // todo : use fractional divider 112.5  alternate between 112 & 113
     if ( clk_upd_count == 16'd112 ) begin
         clk_upd_count <= 16'd0;
-    end else if ( pause_cpu == 0 ) begin
+    end else if ( pause_cpu == 0 && !ss_active ) begin
         clk_upd_count <= clk_upd_count + 1;
-    end    
+    end
 end
+
+// pause stops both CPUs and both sound chips; save states override pause where a CPU must run
+wire run_68k  = ( ~pause_cpu | ss_run68 ) & ~ss_hold68;
+wire run_z80  = ~( pause_cpu & ~ss_active ) & ~ss_z_hold;
+wire run_opl  = ~( pause_cpu | ss_active ) | ss_opl_run;
 
 reg [1:0] reset_sync = 2'b11;
 
@@ -542,7 +589,49 @@ arcade_video #(256,24) arcade_video
         .fx(scan_lines)
 );
 
-screen_rotate screen_rotate (.*);
+ddr_if ddr_host(), ddr_ss(), ddr_rot();
+
+wire        rot_ddr_clk, rot_ddr_we, rot_ddr_rd;
+wire  [7:0] rot_ddr_burst, rot_ddr_be;
+wire [28:0] rot_ddr_addr;
+wire [63:0] rot_ddr_din;
+
+screen_rotate screen_rotate (
+    .CLK_VIDEO(CLK_VIDEO), .CE_PIXEL(CE_PIXEL),
+    .VGA_R(VGA_R), .VGA_G(VGA_G), .VGA_B(VGA_B), .VGA_HS(VGA_HS), .VGA_VS(VGA_VS), .VGA_DE(VGA_DE),
+    .rotate_ccw(rotate_ccw), .no_rotate(no_rotate), .flip(flip), .video_rotated(video_rotated),
+    .FB_EN(FB_EN), .FB_FORMAT(FB_FORMAT), .FB_WIDTH(FB_WIDTH), .FB_HEIGHT(FB_HEIGHT),
+    .FB_BASE(FB_BASE), .FB_STRIDE(FB_STRIDE), .FB_VBL(FB_VBL), .FB_LL(FB_LL),
+    .DDRAM_CLK(rot_ddr_clk), .DDRAM_BUSY(ddr_rot.busy), .DDRAM_BURSTCNT(rot_ddr_burst), .DDRAM_ADDR(rot_ddr_addr),
+    .DDRAM_DIN(rot_ddr_din), .DDRAM_BE(rot_ddr_be), .DDRAM_WE(rot_ddr_we), .DDRAM_RD(rot_ddr_rd)
+);
+
+// DDR3: save states own it while they hold acquire, screen_rotate otherwise
+assign ddr_rot.acquire    = ~ddr_ss.acquire;
+assign ddr_rot.addr       = {rot_ddr_addr, 3'b000};
+assign ddr_rot.wdata      = rot_ddr_din;
+assign ddr_rot.read       = rot_ddr_rd;
+assign ddr_rot.write      = rot_ddr_we;
+assign ddr_rot.burstcnt   = rot_ddr_burst;
+assign ddr_rot.byteenable = rot_ddr_be;
+
+ddr_mux ddr_mux (
+    .clk(clk_sys),
+    .x(ddr_host),
+    .a(ddr_ss),
+    .b(ddr_rot)
+);
+
+assign DDRAM_CLK      = clk_sys;
+assign DDRAM_ADDR     = ddr_host.addr[31:3];
+assign DDRAM_BE       = ddr_host.byteenable;
+assign DDRAM_WE       = ddr_host.write;
+assign DDRAM_RD       = ddr_host.read;
+assign DDRAM_DIN      = ddr_host.wdata;
+assign DDRAM_BURSTCNT = ddr_host.burstcnt;
+assign ddr_host.rdata       = DDRAM_DOUT;
+assign ddr_host.rdata_ready = DDRAM_DOUT_READY;
+assign ddr_host.busy        = DDRAM_BUSY;
 
 reg [7:0] hc_del;
 
@@ -855,12 +944,14 @@ always @ (posedge clk_sys) begin
         if ( clk_18M == 1 ) begin
             // tell 68k to wait for valid data. 0=ready 1=wait
             // always ack when it's not program rom
-            m68k_dtack_n <= m68k_rom_cs ? !m68k_rom_valid : 
-                            m68k_rom_2_cs ? !m68k_rom_2_valid : 
-                            0; 
+            m68k_dtack_n <= ss_ovr_hit ? 0 :
+                            m68k_rom_cs ? !m68k_rom_valid :
+                            m68k_rom_2_cs ? !m68k_rom_2_valid :
+                            0;
 
-            // select cpu data input based on what is active 
-            m68k_din <=  m68k_rom_cs ? m68k_rom_data :
+            // select cpu data input based on what is active
+            m68k_din <=  ss_ovr_hit ? ss_ovr_data :
+                         m68k_rom_cs ? m68k_rom_data :
                          m68k_rom_2_cs ? m68k_rom_2_data :
                          m68k_ram_cs  ? m68k_ram_dout :
                          // high byte of even addressed sprite ram not connected.  pull high.
@@ -905,6 +996,19 @@ always @ (posedge clk_sys) begin
         
         if ( clk_4M == 1 && z80_nmi_n == 0 && z80_addr == 16'h0066 ) begin
             z80_nmi_n <= 1;
+        end
+
+        // save-state restore: board registers, then a fresh NMI edge if one was pending
+        if ( ss_board_load ) begin
+            m68k_latch           <= ss_board[7:0];
+            z80_nmi_n            <= 1;
+            scr_flip             <= ss_board[17];
+            spr_flip_orientation <= ss_board[18];
+            tile_offset          <= ss_board[21:19];
+            invert_input         <= ss_board[22];
+        end
+        if ( ss_nmi_retrigger && !ss_board[16] ) begin
+            z80_nmi_n <= 0;
         end
     end
 end 
@@ -1030,7 +1134,11 @@ always @ (posedge clk_sys ) begin
             int_ack <= ( m68k_as_n == 0 ) && ( m68k_fc == 3'b111 ); // cpu acknowledged the interrupt
         end
 
-        if ( vbl_sr == 2'b01 ) begin // rising edge
+        if ( ss_board_load ) begin
+            m68k_ipl0_n <= ss_board[23];
+        end else if ( ss_active ) begin
+            // held while a save state runs
+        end else if ( vbl_sr == 2'b01 ) begin // rising edge
             // trigger sprite buffer copy
             //  68k vbl interrupt
             m68k_ipl0_n <= 0;
@@ -1052,7 +1160,7 @@ reg fx68_phi1_en;
 reg fx68_phi2_en;
 
 always @(posedge clk_sys) begin
-    if ( clk_18M == 1 ) begin
+    if ( clk_18M == 1 && !ss_hold68 ) begin
         fx68_phi1 <= ~fx68_phi1;
     end
     fx68_phi1_en <= ( clk18_count == 6'd3 ) &  fx68_phi1;
@@ -1066,8 +1174,8 @@ fx68k fx68k (
     .enPhi1(fx68_phi1_en),
     .enPhi2(fx68_phi2_en),
 
-    .extReset(reset),
-    .pwrUp(reset),
+    .extReset((reset | ss_reset68) & cen_18M),
+    .pwrUp((reset | ss_reset68) & cen_18M),
 
     // output
     .eRWn(m68k_rw),
@@ -1090,9 +1198,9 @@ fx68k fx68k (
     .BRn(1'b1),  
     .BGACKn(1'b1),
     
-    .IPL0n(m68k_ipl0_n),
-    .IPL1n(1'b1),
-    .IPL2n(1'b1),
+    .IPL0n(m68k_ipl0_n & ~ss_ipl7),
+    .IPL1n(~ss_ipl7),
+    .IPL2n(~ss_ipl7),
 
     // busses
     .iEdb(m68k_din),
@@ -1120,10 +1228,10 @@ wire MREQ_n;
 wire M1_n;
 
 T80pa z80 (
-    .RESET_n    ( ~reset ),
+    .RESET_n    ( ~(reset | ss_z_reset) ),
     .CLK        ( clk_sys ),
-    .CEN_p      ( clk_4M ),
-    .CEN_n      ( ~clk_4M ),
+    .CEN_p      ( clk_4M & run_z80 ),
+    .CEN_n      ( ~clk_4M & run_z80 ),
     .WAIT_n     ( z80_wait_n ), // z80_wait_n
     .INT_n      ( opl_irq_n ),  // opl_irq_n
     .NMI_n      ( z80_nmi_n ),
@@ -1134,8 +1242,8 @@ T80pa z80 (
     .DI         ( z80_din  ),
     .DO         ( z80_dout ),
     // unused
-    .DIRSET     ( 1'b0     ),
-    .DIR        ( 212'b0   ),
+    .DIRSET     ( ss_z_dirset ),
+    .DIR        ( ss_z_dir[211:0] ),
     .R800_mode  ( 1'b0     ),
     .OUT0       ( 1'b0     ),
     .RFSH_n     (),
@@ -1144,7 +1252,7 @@ T80pa z80 (
     .BUSAK_n    (),
     .HALT_n     ( 1'b1 ),
     .MREQ_n     ( MREQ_n ),
-    .REG        ()
+    .REG        ( z80_reg )
 );
 
 reg opl_wait ;
@@ -1152,9 +1260,18 @@ reg opl_wait ;
 always @ (posedge clk_sys) begin
 
     if ( reset == 1 ) begin
-         z80_wait_n <= 1;   
+         z80_wait_n <= 1;
          z80_latch <= 0;
-    end else if ( clk_4M == 1 ) begin
+    end else if ( ss_board_load ) begin
+         z80_latch      <= ss_board[15:8];
+         upd_din        <= ss_board[55:48];
+         upd_start_n    <= ss_board[56];
+         upd_start_flag <= ss_board[57];
+         upd_reset      <= ss_board[58];
+         sound_addr     <= ss_board[59];
+         sound_data     <= ss_board[71:64];
+         sound_wr       <= 0;
+    end else if ( clk_4M == 1 && run_z80 ) begin
         if ( z80_rd_n == 0 ) begin
         
             if ( z80_rom_cs == 1 ) begin
@@ -1230,15 +1347,21 @@ assign AUDIO_S = 1'b1 ;
 
 wire opl_sample_clk;
 
+// YM3812 inputs: the Z80, or the save-state register replay
+wire       opl_cs = opl_rp_busy ? opl_rp_cs : ( z80_sound0_cs | z80_sound1_cs );
+wire       opl_a  = opl_rp_busy ? opl_rp_a  : z80_sound1_cs;
+wire       opl_wr = opl_rp_busy ? opl_rp_cs : sound_wr;
+wire [7:0] opl_d  = opl_rp_busy ? opl_rp_d  : sound_data;
+
 jtopl #(.OPL_TYPE(2)) opl
 (
-    .rst(reset),
+    .rst(reset | ss_snd_reset),
     .clk(clk_sys),
-    .cen(clk_4M),
-    .din(sound_data),
-    .addr(z80_sound1_cs),
-    .cs_n(~( z80_sound0_cs | z80_sound1_cs )),
-    .wr_n(~sound_wr),
+    .cen(clk_4M & run_opl),
+    .din(opl_d),
+    .addr(opl_a),
+    .cs_n(~opl_cs),
+    .wr_n(~opl_wr),
     .dout(opl_dout),
     .irq_n(opl_irq_n),
     .snd(sample),
@@ -1252,7 +1375,7 @@ reg upd_start_flag ;
 
 jt7759 upd 
 (
-    .rst( reset | upd_reset ),
+    .rst( reset | upd_reset | ss_snd_reset ),
     .clk(clk_sys),  // Use same clock as sound CPU
     .cen(clk_upd),  // 640kHz
     .stn(upd_start_n),  // STart (active low)
@@ -1300,24 +1423,43 @@ wire rom_download = ioctl_download && (ioctl_index==0);
 wire fg_ioctl_wr  = rom_download & ioctl_wr & (ioctl_addr >= 24'h0c0000) & (ioctl_addr < 24'h0d0000) ;
 wire z80_ioctl_wr = rom_download & ioctl_wr & (ioctl_addr >= 24'h080000) & (ioctl_addr < 24'h090000) ;
 
-// main 68k ram high    
+// work RAM port B: save states, else high scores
+wire [12:0] wram_b_addr = ss_sel_wram ? ss_addr_wram : hs_ram_addr[13:1];
+wire [15:0] wram_b_q;
+reg         hs_lane;
+always @(posedge clk_sys) hs_lane <= hs_ram_addr[0];
+assign hs_ram_q = hs_lane ? wram_b_q[7:0] : wram_b_q[15:8];
+
+// main 68k ram high
 dual_port_ram #(.LEN(8192)) ram8kx8_H (
     .clock_a ( clk_sys ),
     .cen_a ( cen_18M ),
     .address_a ( m68k_a[13:1] ),
     .wren_a ( !m68k_rw & m68k_ram_cs & !m68k_uds_n ),
     .data_a ( m68k_dout[15:8]  ),
-    .q_a (  m68k_ram_dout[15:8] ) 
+    .q_a (  m68k_ram_dout[15:8] ),
+
+    .clock_b ( clk_sys ),
+    .address_b ( wram_b_addr ),
+    .wren_b ( ss_sel_wram ? ss_we_wram : ( hs_ram_we & ~hs_ram_addr[0] ) ),
+    .data_b ( ss_sel_wram ? ss_din_wram[15:8] : hs_ram_din ),
+    .q_b ( wram_b_q[15:8] )
     );
 
-// main 68k ram low     
+// main 68k ram low
 dual_port_ram #(.LEN(8192)) ram8kx8_L (
     .clock_a ( clk_sys ),
     .cen_a ( cen_18M ),
     .address_a ( m68k_a[13:1] ),
     .wren_a ( !m68k_rw & m68k_ram_cs & !m68k_lds_n ),
     .data_a ( m68k_dout[7:0]  ),
-    .q_a ( m68k_ram_dout[7:0] ) 
+    .q_a ( m68k_ram_dout[7:0] ),
+
+    .clock_b ( clk_sys ),
+    .address_b ( wram_b_addr ),
+    .wren_b ( ss_sel_wram ? ss_we_wram : ( hs_ram_we & hs_ram_addr[0] ) ),
+    .data_b ( ss_sel_wram ? ss_din_wram[7:0] : hs_ram_din ),
+    .q_b ( wram_b_q[7:0] )
     );
 
 reg  [13:0] sprite_ram_addr;
@@ -1327,10 +1469,10 @@ wire [15:0] sprite_ram_dout /* synthesis keep */;
 // 2kx16
 dual_port_ram #(.LEN(16384)) sprite_ram_H (
     .clock_a ( clk_sys ),
-    .cen_a ( cen_18M ),
-    .address_a ( m68k_a[14:1] ),
-    .wren_a ( !m68k_rw & m68k_spr_cs & !m68k_uds_n ),
-    .data_a ( m68k_dout[15:8]  ),
+    .cen_a ( cen_18M | ss_sel_spr ),
+    .address_a ( ss_sel_spr ? ss_addr_spr : m68k_a[14:1] ),
+    .wren_a ( ss_sel_spr ? ss_we_spr : ( !m68k_rw & m68k_spr_cs & !m68k_uds_n ) ),
+    .data_a ( ss_sel_spr ? ss_din_spr[15:8] : m68k_dout[15:8]  ),
     .q_a (  m68k_sprite_dout[15:8] ),
 
     .clock_b ( clk_sys ),
@@ -1343,10 +1485,10 @@ dual_port_ram #(.LEN(16384)) sprite_ram_H (
 // main 68k sprite ram low     
 dual_port_ram #(.LEN(16384)) sprite_ram_L (
     .clock_a ( clk_sys ),
-    .cen_a ( cen_18M ),
-    .address_a ( m68k_a[14:1] ),
-    .wren_a ( !m68k_rw & m68k_spr_cs & !m68k_lds_n ),
-    .data_a ( m68k_dout[7:0]  ),
+    .cen_a ( cen_18M | ss_sel_spr ),
+    .address_a ( ss_sel_spr ? ss_addr_spr : m68k_a[14:1] ),
+    .wren_a ( ss_sel_spr ? ss_we_spr : ( !m68k_rw & m68k_spr_cs & !m68k_lds_n ) ),
+    .data_a ( ss_sel_spr ? ss_din_spr[7:0] : m68k_dout[7:0]  ),
     .q_a ( m68k_sprite_dout[7:0] ),
      
     .clock_b ( clk_sys ),
@@ -1365,10 +1507,10 @@ wire [15:0] m68k_fg_ram_dout;
 // foreground high   
 dual_port_ram #(.LEN(2048)) ram_fg_h (
     .clock_a ( clk_sys ),
-    .cen_a ( cen_18M ),
-    .address_a ( m68k_a[11:1] ),
-    .wren_a ( !m68k_rw & m68k_fg_ram_cs & !m68k_uds_n ), // can write to m68k_fg_mirror_cs but not read
-    .data_a ( m68k_dout[15:8]  ),
+    .cen_a ( cen_18M | ss_sel_fg ),
+    .address_a ( ss_sel_fg ? ss_addr_fg : m68k_a[11:1] ),
+    .wren_a ( ss_sel_fg ? ss_we_fg : ( !m68k_rw & m68k_fg_ram_cs & !m68k_uds_n ) ), // can write to m68k_fg_mirror_cs but not read
+    .data_a ( ss_sel_fg ? ss_din_fg[15:8] : m68k_dout[15:8]  ),
     .q_a ( m68k_fg_ram_dout[15:8] ),
 
     .clock_b ( clk_sys ),
@@ -1382,10 +1524,10 @@ dual_port_ram #(.LEN(2048)) ram_fg_h (
 // foreground low
 dual_port_ram #(.LEN(2048)) ram_fg_l (
     .clock_a ( clk_sys ),
-    .cen_a ( cen_18M ),
-    .address_a ( m68k_a[11:1] ),
-    .wren_a ( !m68k_rw & m68k_fg_ram_cs & !m68k_lds_n ),
-    .data_a ( m68k_dout[7:0]  ),
+    .cen_a ( cen_18M | ss_sel_fg ),
+    .address_a ( ss_sel_fg ? ss_addr_fg : m68k_a[11:1] ),
+    .wren_a ( ss_sel_fg ? ss_we_fg : ( !m68k_rw & m68k_fg_ram_cs & !m68k_lds_n ) ),
+    .data_a ( ss_sel_fg ? ss_din_fg[7:0] : m68k_dout[7:0]  ),
     .q_a ( m68k_fg_ram_dout[7:0] ),
      
     .clock_b ( clk_sys ),
@@ -1413,10 +1555,10 @@ wire [4:0] b_pal = { tile_pal_dout[3:0]  , tile_pal_dout[12] };
 // tile palette high   
 dual_port_ram #(.LEN(2048)) tile_pal_h (
     .clock_a ( clk_sys ),
-    .cen_a ( cen_18M ),
-    .address_a ( m68k_a[11:1] ),
-    .wren_a ( !m68k_rw & m68k_pal_cs & !m68k_uds_n ),
-    .data_a ( m68k_dout[15:8]  ),
+    .cen_a ( cen_18M | ss_sel_pal ),
+    .address_a ( ss_sel_pal ? ss_addr_pal : m68k_a[11:1] ),
+    .wren_a ( ss_sel_pal ? ss_we_pal : ( !m68k_rw & m68k_pal_cs & !m68k_uds_n ) ),
+    .data_a ( ss_sel_pal ? ss_din_pal[15:8] : m68k_dout[15:8]  ),
     .q_a ( m68k_pal_dout[15:8]  ),
 
     .clock_b ( clk_sys ),
@@ -1429,10 +1571,10 @@ dual_port_ram #(.LEN(2048)) tile_pal_h (
 //  tile palette low
 dual_port_ram #(.LEN(2048)) tile_pal_l (
     .clock_a ( clk_sys ),
-    .cen_a ( cen_18M ),
-    .address_a ( m68k_a[11:1] ),
-    .wren_a ( !m68k_rw & m68k_pal_cs & !m68k_lds_n ),
-    .data_a ( m68k_dout[7:0]  ),
+    .cen_a ( cen_18M | ss_sel_pal ),
+    .address_a ( ss_sel_pal ? ss_addr_pal : m68k_a[11:1] ),
+    .wren_a ( ss_sel_pal ? ss_we_pal : ( !m68k_rw & m68k_pal_cs & !m68k_lds_n ) ),
+    .data_a ( ss_sel_pal ? ss_din_pal[7:0] : m68k_dout[7:0]  ),
     .q_a ( m68k_pal_dout[7:0] ),
      
     .clock_b ( clk_sys ),
@@ -1458,8 +1600,14 @@ dual_port_ram #(.LEN(65536)) z80_rom (
     .q_b( )
     );
     
-// z80 ram 
+// z80 ram (port A: save states)
 dual_port_ram #(.LEN(2048)) z80_ram (
+    .clock_a ( clk_sys ),
+    .address_a ( ss_addr_zram ),
+    .wren_a ( ss_we_zram ),
+    .data_a ( ss_din_zram ),
+    .q_a ( ss_q_zram ),
+
     .clock_b ( clk_sys ),
     .cen_b ( cen_4M ),
     .address_b ( z80_addr[10:0] ),
@@ -1659,7 +1807,7 @@ rom_controller rom_controller
     .ioctl_data(ioctl_dout),
     .ioctl_index(ioctl_index),
     .ioctl_wr(ioctl_wr),
-    .ioctl_download(ioctl_download),
+    .ioctl_download(rom_download),
 
     // SDRAM interface
     .sdram_addr(sdram_addr),
@@ -1673,7 +1821,7 @@ rom_controller rom_controller
 
 cache prog_cache
 (
-    .reset(reset),
+    .reset(reset | ss_cache_flush),
     .clk(clk_sys),
 
     // client
@@ -1745,6 +1893,173 @@ sdram #(.CLK_FREQ( (CLKSYS+0.0))) sdram
   .sdram_dqml(SDRAM_DQML),
   .sdram_dqmh(SDRAM_DQMH)
 );    
+
+//////////////////////////////////////////////////////////////////
+// Save states
+
+wire        ss_save, ss_load, ss_status_set, ss_info_req;
+wire  [1:0] ss_slot;
+wire  [7:0] ss_info;
+wire        ss_active, ss_hold68, ss_run68, ss_reset68, ss_ipl7, ss_ovr_hit;
+wire [15:0] ss_ovr_data;
+wire        ss_z_hold, ss_z_reset, ss_z_dirset, ss_snd_reset, ss_opl_run, ss_opl_replay;
+wire        ss_board_load, ss_nmi_retrigger, ss_cache_flush;
+wire[211:0] z80_reg;
+wire[255:0] ss_z_dir;
+wire[127:0] ss_board;
+wire [21:0] ss_vpos;
+
+// joystick directions of the pad that holds L, keyboard F1 / Alt only (F2-F4 are Test / Reset here)
+wire        joy_ss   = joy0_full[12] | joy1_full[12];
+wire  [3:0] joy_ssd  = ( joy0_full[12] ? joy0_full[3:0] : 4'd0 ) | ( joy1_full[12] ? joy1_full[3:0] : 4'd0 );
+wire [10:0] ss_ps2_key = ( ps2_key[7:0] == 8'h05 || ps2_key[7:0] == 8'h11 ) ? ps2_key : { ss_key_tgl, ps2_key[9:0] };
+reg         ss_key_tgl;
+always @(posedge clk_sys) if ( ps2_key[7:0] == 8'h05 || ps2_key[7:0] == 8'h11 ) ss_key_tgl <= ps2_key[10];
+
+savestate_ui #(.INFO_TIMEOUT_BITS(25)) savestate_ui (
+    .clk            ( clk_sys ),
+    .ps2_key        ( ss_ps2_key ),
+    .allow_ss       ( 1'b1 ),
+    .joySS          ( joy_ss ),
+    .joyRight       ( joy_ssd[0] ),
+    .joyLeft        ( joy_ssd[1] ),
+    .joyDown        ( joy_ssd[2] ),
+    .joyUp          ( joy_ssd[3] ),
+    .joyStart       ( 1'b0 ),
+    .joyRewind      ( 1'b0 ),
+    .rewindEnable   ( 1'b0 ),
+    .status_slot    ( status[65:64] ),
+    .autoincslot    ( status[66] ),
+    .OSD_saveload   ( status[68:67] ),
+    .ss_save        ( ss_save ),
+    .ss_load        ( ss_load ),
+    .ss_info_req    ( ss_info_req ),
+    .ss_info        ( ss_info ),
+    .statusUpdate   ( ss_status_set ),
+    .selected_slot  ( ss_slot )
+);
+
+ssbus_if ssbus();
+ssbus_if ssb[9]();
+
+ssbus_mux #(.COUNT(9)) ssbus_mux (
+    .clk     ( clk_sys ),
+    .masters ( ssb ),
+    .slave   ( ssbus )
+);
+
+snk68_ss snk68_ss (
+    .clk            ( clk_sys ),
+    .reset          ( reset ),
+    .ss_save        ( ss_save ),
+    .ss_load        ( ss_load ),
+    .ss_slot        ( ss_slot ),
+    .ddr            ( ddr_ss ),
+    .ssbus          ( ssbus ),
+    .ss_ssp         ( ssb[0] ),
+    .cen68          ( cen_18M ),
+    .m68k_a         ( m68k_a[23:1] ),
+    .m68k_as_n      ( m68k_as_n ),
+    .m68k_uds_n     ( m68k_uds_n ),
+    .m68k_lds_n     ( m68k_lds_n ),
+    .m68k_rw        ( m68k_rw ),
+    .m68k_fc        ( m68k_fc ),
+    .m68k_dout      ( m68k_dout ),
+    .vpos           ( { vc, hc, clk6_count[3:0] } ),
+    .vpos_saved     ( ss_vpos ),
+    .vpos_load      ( ss_board[93:72] ),
+    .hold68         ( ss_hold68 ),
+    .run68          ( ss_run68 ),
+    .reset68        ( ss_reset68 ),
+    .ipl7           ( ss_ipl7 ),
+    .ovr_hit        ( ss_ovr_hit ),
+    .ovr_data       ( ss_ovr_data ),
+    .z80_m1_n       ( M1_n ),
+    .z_hold         ( ss_z_hold ),
+    .z_reset        ( ss_z_reset ),
+    .z_dirset       ( ss_z_dirset ),
+    .snd_reset      ( ss_snd_reset ),
+    .opl_run        ( ss_opl_run ),
+    .opl_replay     ( ss_opl_replay ),
+    .opl_replay_busy( opl_rp_busy ),
+    .active         ( ss_active ),
+    .cache_flush    ( ss_cache_flush ),
+    .board_load     ( ss_board_load ),
+    .nmi_retrigger  ( ss_nmi_retrigger )
+);
+
+// chunks: 1 work RAM, 2 sprite RAM, 3 text RAM, 4 palette, 5 Z80 RAM, 6 Z80 registers, 7 board registers, 8 YM3812
+wire        ss_sel_wram, ss_we_wram, ss_sel_spr, ss_we_spr, ss_sel_fg, ss_we_fg, ss_sel_pal, ss_we_pal, ss_sel_zram, ss_we_zram;
+wire [12:0] ss_addr_wram;
+wire [13:0] ss_addr_spr;
+wire [10:0] ss_addr_fg, ss_addr_pal, ss_addr_zram;
+wire [15:0] ss_din_wram, ss_din_spr, ss_din_fg, ss_din_pal;
+wire  [7:0] ss_din_zram, ss_q_zram;
+
+ss_ram_adaptor #(.AW(13), .DW(16), .SS_IDX(1)) ss_wram (.clk(clk_sys), .ssbus(ssb[1]), .sel(ss_sel_wram), .addr(ss_addr_wram),
+    .din(ss_din_wram), .we(ss_we_wram), .q(wram_b_q));
+ss_ram_adaptor #(.AW(14), .DW(16), .SS_IDX(2)) ss_spr (.clk(clk_sys), .ssbus(ssb[2]), .sel(ss_sel_spr), .addr(ss_addr_spr),
+    .din(ss_din_spr), .we(ss_we_spr), .q(m68k_sprite_dout));
+ss_ram_adaptor #(.AW(11), .DW(16), .SS_IDX(3)) ss_fg (.clk(clk_sys), .ssbus(ssb[3]), .sel(ss_sel_fg), .addr(ss_addr_fg),
+    .din(ss_din_fg), .we(ss_we_fg), .q(m68k_fg_ram_dout));
+ss_ram_adaptor #(.AW(11), .DW(16), .SS_IDX(4)) ss_pal (.clk(clk_sys), .ssbus(ssb[4]), .sel(ss_sel_pal), .addr(ss_addr_pal),
+    .din(ss_din_pal), .we(ss_we_pal), .q(m68k_pal_dout));
+ss_ram_adaptor #(.AW(11), .DW(8), .SS_IDX(5)) ss_zram (.clk(clk_sys), .ssbus(ssb[5]), .sel(ss_sel_zram), .addr(ss_addr_zram),
+    .din(ss_din_zram), .we(ss_we_zram), .q(ss_q_zram));
+ss_reg_chunk #(.WORDS(4), .SS_IDX(6)) ss_z80 (.clk(clk_sys), .ssbus(ssb[6]), .cur({44'd0, z80_reg}), .saved(ss_z_dir));
+ss_reg_chunk #(.WORDS(2), .SS_IDX(7)) ss_brd (.clk(clk_sys), .ssbus(ssb[7]), .saved(ss_board),
+    .cur({ 34'd0, ss_vpos, sound_data,
+           4'd0, sound_addr, upd_reset, upd_start_flag, upd_start_n, upd_din,
+           rotary2, rotary1, m68k_ipl0_n, invert_input, tile_offset, spr_flip_orientation, scr_flip, z80_nmi_n,
+           z80_latch, m68k_latch }));
+
+wire       opl_rp_busy, opl_rp_cs, opl_rp_a;
+wire [7:0] opl_rp_d;
+
+snk68_opl_shadow #(.SS_IDX(8)) ss_opl (
+    .clk      ( clk_sys ),
+    .ssbus    ( ssb[8] ),
+    .snoop_wr ( opl_cs & opl_wr ),
+    .snoop_a  ( opl_a ),
+    .snoop_d  ( opl_d ),
+    .replay   ( ss_opl_replay ),
+    .busy     ( opl_rp_busy ),
+    .rp_cs    ( opl_rp_cs ),
+    .rp_a     ( opl_rp_a ),
+    .rp_d     ( opl_rp_d )
+);
+
+//////////////////////////////////////////////////////////////////
+// High scores (MRA index 3 = hiscore.dat entries, NVRAM index 4)
+
+wire        hs_has_entries, hs_ram_sel, hs_ram_we;
+wire [13:0] hs_ram_addr;
+wire  [7:0] hs_ram_din, hs_ram_q;
+
+snk68_hiscore snk68_hiscore (
+    .clk            ( clk_sys ),
+    .reset          ( reset ),
+    .vblank         ( vbl ),
+    .ioctl_download ( ioctl_download ),
+    .ioctl_upload   ( ioctl_upload ),
+    .ioctl_wr       ( ioctl_wr ),
+    .ioctl_addr     ( ioctl_addr ),
+    .ioctl_dout     ( ioctl_dout ),
+    .ioctl_index    ( ioctl_index ),
+    .ioctl_din      ( ioctl_din ),
+    .upload_req     ( ioctl_upload_req ),
+    .osd_open       ( OSD_STATUS ),
+    .autosave       ( ~status[69] ),
+    .save_now       ( status[70] ),
+    .has_entries    ( hs_has_entries ),
+    .port_busy      ( ss_sel_wram | ss_active ),
+    .cpu_busy       ( m68k_ram_cs ),
+    .ram_sel        ( hs_ram_sel ),
+    .ram_addr       ( hs_ram_addr ),
+    .ram_din        ( hs_ram_din ),
+    .ram_we         ( hs_ram_we ),
+    .ram_q          ( hs_ram_q )
+);
 
 endmodule
 

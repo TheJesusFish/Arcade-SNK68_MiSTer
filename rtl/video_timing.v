@@ -21,23 +21,30 @@ module video_timing
     output reg  vbl 
 );
 
+// OSD sync adjustments, sign-extended
+wire [8:0] hso = {{5{hs_offset[3]}}, hs_offset};
+wire [8:0] hsw = {{5{hs_width[3]}},  hs_width};
+wire [9:0] vso = {{6{vs_offset[3]}}, vs_offset};
+wire [4:0] vsl = 5'd9 + {vs_width[3], vs_width};
+
 wire [8:0] h_ofs = 9'd0;
 wire [8:0] HBL_START  = 9'd256 ;
 wire [8:0] HBL_END    = 9'd0 ;
-wire [8:0] HS_START   = HBL_START + 9'd41 + $signed(hs_offset);
-wire [8:0] HS_END     = HBL_START + 9'd73 + $signed(hs_offset) + $signed(hs_width);
+wire [8:0] HS_START   = HBL_START + 9'd41 + hso;
+wire [8:0] HS_END     = HBL_START + 9'd73 + hso + hsw;
 wire [8:0] HTOTAL     = 9'd383;
 
 wire [8:0] v_ofs = 9'd0;
-wire [8:0] vs_start_calc = VBL_START + 9'd16 + $signed(vs_offset) ;
-wire [8:0] vs_end_calc   = VBL_START + 9'd24 + $signed(vs_offset) + $signed(vs_width);
-
 wire [8:0] VBL_START  = 9'd241 ;
 wire [8:0] VBL_END    = 9'd17 ;
-// if sync wraps around substract the v total
-wire [8:0] VS_START   = ( vs_start_calc <= VTOTAL ) ? vs_start_calc : ( vs_start_calc - VTOTAL );
-wire [8:0] VS_END     = ( vs_end_calc   <= VTOTAL ) ? vs_end_calc   : ( vs_end_calc   - VTOTAL );
 wire [8:0] VTOTAL     = 9'd263 ;
+// V sync: 9 lines from line 257 by default, 1 to 16 lines, wrapped into the 264-line frame
+wire [9:0] vs_start_calc = 10'd257 + vso;
+wire [9:0] vs_end_calc   = vs_start_calc + {5'd0, vsl};
+wire [9:0] vs_start_wr   = vs_start_calc - 10'd264;
+wire [9:0] vs_end_wr     = vs_end_calc   - 10'd264;
+wire [8:0] VS_START   = ( vs_start_calc < 10'd264 ) ? vs_start_calc[8:0] : vs_start_wr[8:0];
+wire [8:0] VS_END     = ( vs_end_calc   < 10'd264 ) ? vs_end_calc[8:0]   : vs_end_wr[8:0];
 
 
 reg [8:0] v;
@@ -47,7 +54,8 @@ assign vc = v - v_ofs;
 assign hc = h - h_ofs;
 
 always @ (posedge clk) begin
-    if (reset) begin
+    // reset is sampled on pixel enables only
+    if (reset && clk_pix) begin
         h <= 0;
         v <= 0;
 

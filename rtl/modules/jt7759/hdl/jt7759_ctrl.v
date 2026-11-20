@@ -141,7 +141,7 @@ always @(posedge clk, posedge rst) begin
                     else st <= IDLE;
                 end
                 DONE: begin
-                    st <= IDLE;
+                    st <= DONE; // stay here forever
                     flush <= 1;
                 end
                 // Check the chip signature
