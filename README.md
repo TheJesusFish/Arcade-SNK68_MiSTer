@@ -30,7 +30,7 @@ MSM5205 in place of the uPD7759).
 | [**T80**](https://github.com/MiSTer-devel/NeoGeo_MiSTer/tree/master/rtl/cpu/T80) (NeoGeo_MiSTer `rtl/cpu/T80` @ `90a8350`) | [**Zilog Z80 CPU**](https://en.wikipedia.org/wiki/Zilog_Z80) | Daniel Wallner / MikeJ / Sorgelig |
 | [**jtopl**](https://github.com/jotego/jtopl) @ `f96ff3e`                                                      | [**Yamaha OPL 2**](https://en.wikipedia.org/wiki/Yamaha_OPL#OPL2)      | Jose Tejada |
 | [**jt7759**](https://github.com/jotego/jt7759) @ `c23dc9f`                                                    | [**NEC uPD7759**](https://github.com/jotego/jt7759)                    | Jose Tejada |
-| [**Template_MiSTer sys/**](https://github.com/MiSTer-devel/Template_MiSTer) @ `e901a9f` (incl. yc_out)        | MiSTer framework                                                       | MiSTer-devel |
+| [**Template_MiSTer sys/**](https://github.com/MiSTer-devel/Template_MiSTer) @ `d6324f2` (incl. yc_out)        | MiSTer framework                                                       | MiSTer-devel |
 | [**Arcade-TaitoF2_MiSTer**](https://github.com/MiSTer-devel/Arcade-TaitoF2_MiSTer) @ `9438df9` save-state code (`rtl/savestate/`: ddram, memory_stream, savestates, savestate_ui) | Save states | Martin Donlon |
 | [**Pause_MiSTer**](https://github.com/JimmyStones/Pause_MiSTer) (`rtl/pause.v`, va7deo modified)              | Pause handling                                                          | Jim Gregory |
 
@@ -112,8 +112,8 @@ SNKI/O   | A7007 (IK3) / A8007 (SAR) | [**SNK I/O**](https://github.com/va7deo/S
 
 ### Save States
 
-- Hold **L** on either pad: **Down** saves, **Up** restores, **Left / Right** change the slot (4 slots). Keyboard: Alt+F1 saves,
-  F1 restores. The OSD has Savestate Slot, Autoincrement Slot, Save state and Restore state.
+- Hold **L** on either pad: **Down** saves, **Up** restores, **Left / Right** change the slot (4 slots). Keyboard: Alt+F1 saves to
+  the selected slot, F1 restores it. The OSD has Savestate Slot, Autoincrement Slot, Save state and Restore state.
 - Saved: 68000 registers, work, sprite, text and palette RAM, Z80 registers and RAM, board latches, the YM3812 registers and the
   rotary positions. A sample the uPD7759 is playing at the moment of the save is not restored.
 

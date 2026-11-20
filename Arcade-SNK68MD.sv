@@ -501,7 +501,17 @@ always @ (posedge clk_sys) begin
     reset_sync <= { reset_sync[0], RESET };
 end
 
-wire    reset = reset_sync[1] | key_reset | status[0];
+wire    reset_req = reset_sync[1] | key_reset | status[0];
+reg     reset_hold = 1'b1;
+wire    vt_frame_start;
+
+// the game leaves reset at a frame start, where the free-running video counters wrap to zero
+always @ (posedge clk_sys) begin
+    if ( reset_req ) reset_hold <= 1'b1;
+    else if ( vt_frame_start ) reset_hold <= 1'b0;
+end
+
+wire    reset = reset_req | reset_hold;
 
 //////////////////////////////////////////////////////////////////
 wire rotate_ccw = 0;
@@ -513,6 +523,8 @@ reg [23:0]     rgb;
 
 wire hbl;
 wire vbl;
+wire hbl_d;
+wire vbl_d;
 
 wire [8:0] hc;
 wire [8:0] vc;
@@ -527,8 +539,8 @@ reg hbl_delay, vbl_delay;
 
 always @ ( posedge clk_sys ) begin
     if ( cen_6M == 1 ) begin
-        hbl_delay <= hbl ;
-        vbl_delay <= vbl ;
+        hbl_delay <= hbl_d ;
+        vbl_delay <= vbl_d ;
     end
 end
 
@@ -544,6 +556,9 @@ video_timing video_timing (
     .vs_width(vs_width),
     .hbl(hbl),
     .vbl(vbl),
+    .hbl_d(hbl_d),
+    .vbl_d(vbl_d),
+    .frame_start(vt_frame_start),
     .hsync(hsync),
     .vsync(vsync)
 );
@@ -1912,7 +1927,10 @@ wire [21:0] ss_vpos;
 // joystick directions of the pad that holds L, keyboard F1 / Alt only (F2-F4 are Test / Reset here)
 wire        joy_ss   = joy0_full[12] | joy1_full[12];
 wire  [3:0] joy_ssd  = ( joy0_full[12] ? joy0_full[3:0] : 4'd0 ) | ( joy1_full[12] ? joy1_full[3:0] : 4'd0 );
-wire [10:0] ss_ps2_key = ( ps2_key[7:0] == 8'h05 || ps2_key[7:0] == 8'h11 ) ? ps2_key : { ss_key_tgl, ps2_key[9:0] };
+// F1 reaches the UI as the F key of the selected slot, so F1 / Alt-F1 use that slot
+wire  [7:0] ss_fkey  = ( ss_slot == 2'd0 ) ? 8'h05 : ( ss_slot == 2'd1 ) ? 8'h06 : ( ss_slot == 2'd2 ) ? 8'h04 : 8'h0c;
+wire [10:0] ss_ps2_key = ( ps2_key[7:0] == 8'h05 ) ? { ps2_key[10:8], ss_fkey } :
+                         ( ps2_key[7:0] == 8'h11 ) ? ps2_key : { ss_key_tgl, ps2_key[9:0] };
 reg         ss_key_tgl;
 always @(posedge clk_sys) if ( ps2_key[7:0] == 8'h05 || ps2_key[7:0] == 8'h11 ) ss_key_tgl <= ps2_key[10];
 

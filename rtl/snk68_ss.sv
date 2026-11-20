@@ -58,6 +58,7 @@ typedef enum logic [3:0] {
     ST_SAVE_PARKZ,
     ST_SAVE_IRQ,
     ST_SAVE_SSP,
+    ST_SAVE_HDR,
     ST_SAVE_WRITE,
     ST_SAVE_SYNC,
     ST_SAVE_EXIT,
@@ -96,6 +97,7 @@ reg         m1_l;
 reg         z_hold_r;
 reg         rp_start;
 reg         got_state;
+reg         hd_start, hd_done;
 
 wire        ds        = ~m68k_uds_n | ~m68k_lds_n;
 wire        in_hdl    = m68k_a[23:5] == 19'h1f800;
@@ -104,7 +106,7 @@ wire        in_rst    = m68k_a[23:3] == 21'h0;
 wire        prog_rd   = ~m68k_as_n & ds & m68k_rw & m68k_fc[1:0] == 2'b10;
 wire        iack7     = ~m68k_as_n & m68k_fc == 3'b111 & m68k_a[3:1] == 3'b111;
 
-wire        save_ovr  = st == ST_SAVE_SSP || st == ST_SAVE_WRITE || st == ST_SAVE_SYNC || st == ST_SAVE_EXIT;
+wire        save_ovr  = st == ST_SAVE_SSP || st == ST_SAVE_HDR || st == ST_SAVE_WRITE || st == ST_SAVE_SYNC || st == ST_SAVE_EXIT;
 wire        load_ovr  = st == ST_LOAD_68RST || st == ST_LOAD_68RUN || st == ST_LOAD_68SYNC || st == ST_LOAD_68EXIT;
 // the handler's write of the low SSP word: the 68000 is held here on save and on restore
 wire        ssp_lo_wr = ~m68k_as_n & ~m68k_rw & ds & in_hdl & m68k_a[1];
@@ -140,6 +142,7 @@ always_comb begin
         ST_SAVE_PARKZ:  hold68 = 1;
         ST_SAVE_IRQ:    begin run68 = 1; ipl7 = 1; end
         ST_SAVE_SSP:    run68 = 1;
+        ST_SAVE_HDR:    hold68 = 1;
         ST_SAVE_WRITE:  hold68 = 1;
         ST_SAVE_SYNC:   hold68 = 1;
         ST_SAVE_EXIT:   run68 = 1;
@@ -176,6 +179,7 @@ always_ff @(posedge clk) begin
     nmi_retrigger <= 0;
     rp_start      <= 0;
     z_dirset      <= 0;
+    hd_start      <= 0;
     if (reset) begin
         st       <= ST_IDLE;
         ss_write <= 0;
@@ -185,9 +189,10 @@ always_ff @(posedge clk) begin
         case (st)
             ST_IDLE: begin
                 z_hold_r <= 0;
-                slot_l   <= ss_slot;
+                // keep the slot from before the request: the UI advances it in the request cycle
                 if (ss_save)      st <= ST_SAVE_PARKZ;
                 else if (ss_load) begin st <= ST_LOAD_READ; ss_read <= 1; z_hold_r <= 1; end
+                else              slot_l <= ss_slot;
             end
 
             ST_SAVE_PARKZ:
@@ -202,10 +207,14 @@ always_ff @(posedge clk) begin
                     else begin
                         ssp_saved[15:0] <= m68k_dout;
                         vpos_saved <= vpos;
-                        ss_write <= 1;
-                        st <= ST_SAVE_WRITE;
+                        hd_start <= 1;
+                        st <= ST_SAVE_HDR;
                     end
                 end
+
+            // the slot reads as empty until the stream writes its new header
+            ST_SAVE_HDR:
+                if (hd_done) begin ss_write <= 1; st <= ST_SAVE_WRITE; end
 
             ST_SAVE_WRITE:
                 if (ss_busy & ss_write) ss_write <= 0;
@@ -271,10 +280,59 @@ end
 
 always_comb opl_replay = rp_start;
 
+// slot header (length, change counter) and stream share the save-state DDR port
+ddr_if ddr_hd();
+ddr_if ddr_ms();
+ddr_mux hd_mux (.clk(clk), .x(ddr), .a(ddr_hd), .b(ddr_ms));
+
+typedef enum logic [2:0] { HD_IDLE, HD_RD, HD_RD_WAIT, HD_WR, HD_WR_WAIT } hd_state_t;
+hd_state_t  hd = HD_IDLE;
+reg  [31:0] hd_count;
+wire [31:0] slot_base = SS_DDR_BASE + {8'd0, slot_l, 22'd0};
+
+assign ddr_hd.burstcnt   = 8'd1;
+assign ddr_hd.byteenable = 8'hff;
+
+// header length set to 0 with the change counter kept: an interrupted save leaves an empty slot
+always_ff @(posedge clk) begin
+    hd_done <= 0;
+    if (reset) begin
+        hd             <= HD_IDLE;
+        ddr_hd.acquire <= 0;
+        ddr_hd.read    <= 0;
+        ddr_hd.write   <= 0;
+    end else case (hd)
+        HD_IDLE:
+            if (hd_start) begin ddr_hd.acquire <= 1; hd <= HD_RD; end
+        HD_RD:
+            if (~ddr_hd.busy) begin ddr_hd.read <= 1; ddr_hd.addr <= slot_base; hd <= HD_RD_WAIT; end
+        HD_RD_WAIT:
+            if (~ddr_hd.busy) begin
+                ddr_hd.read <= 0;
+                if (ddr_hd.rdata_ready) begin hd_count <= ddr_hd.rdata[31:0]; hd <= HD_WR; end
+            end
+        HD_WR:
+            if (~ddr_hd.busy) begin
+                ddr_hd.write <= 1;
+                ddr_hd.addr  <= slot_base;
+                ddr_hd.wdata <= {32'd0, hd_count};
+                hd <= HD_WR_WAIT;
+            end
+        HD_WR_WAIT:
+            if (~ddr_hd.busy) begin
+                ddr_hd.write   <= 0;
+                ddr_hd.acquire <= 0;
+                hd_done        <= 1;
+                hd             <= HD_IDLE;
+            end
+        default: hd <= HD_IDLE;
+    endcase
+end
+
 save_state_data save_state_data (
     .clk(clk),
     .reset(reset),
-    .ddr(ddr),
+    .ddr(ddr_ms),
     .read_start(ss_read),
     .write_start(ss_write),
     .index(slot_l),

@@ -16,9 +16,13 @@ module video_timing
 
     output reg  hsync,
     output reg  vsync,
-    
+
     output reg  hbl,
-    output reg  vbl 
+    output reg  vbl,
+
+    output reg  hbl_d,
+    output reg  vbl_d,
+    output      frame_start
 );
 
 // OSD sync adjustments, sign-extended
@@ -47,24 +51,22 @@ wire [8:0] VS_START   = ( vs_start_calc < 10'd264 ) ? vs_start_calc[8:0] : vs_st
 wire [8:0] VS_END     = ( vs_end_calc   < 10'd264 ) ? vs_end_calc[8:0]   : vs_end_wr[8:0];
 
 
-reg [8:0] v;
-reg [8:0] h;
+reg [8:0] v = 9'd0;
+reg [8:0] h = 9'd0;
+
+initial begin
+    hsync = 0; vsync = 0; hbl = 0; vbl = 0; hbl_d = 0; vbl_d = 0;
+end
 
 assign vc = v - v_ofs;
 assign hc = h - h_ofs;
 
+// the clk_pix enable on which the counters wrap to line 0, pixel 0
+assign frame_start = clk_pix && h == HTOTAL && v == VTOTAL;
+
+// counters, syncs and display blanking run through resets; the game's blanking is held low during reset
 always @ (posedge clk) begin
-    // reset is sampled on pixel enables only
-    if (reset && clk_pix) begin
-        h <= 0;
-        v <= 0;
-
-        hbl <= 0;
-        vbl <= 0;
-
-        hsync <= 0;
-        vsync <= 0;
-    end else if ( clk_pix == 1 ) begin 
+    if ( clk_pix == 1 ) begin
         // counter
         if (h == HTOTAL) begin
             h <= 0;
@@ -79,18 +81,35 @@ always @ (posedge clk) begin
 
         // h signals
         if ( h == HBL_START ) begin
-            hbl <= 1;
+            hbl_d <= 1;
         end else if ( h == HBL_END ) begin
-            hbl <= 0;
+            hbl_d <= 0;
         end
 
         // v signals
         if ( v == VBL_START ) begin
-            vbl <= 1;
+            vbl_d <= 1;
         end else if ( v == VBL_END ) begin
-            vbl <= 0;
+            vbl_d <= 0;
         end
-   
+
+        if ( reset ) begin
+            hbl <= 0;
+            vbl <= 0;
+        end else begin
+            if ( h == HBL_START ) begin
+                hbl <= 1;
+            end else if ( h == HBL_END ) begin
+                hbl <= 0;
+            end
+
+            if ( v == VBL_START ) begin
+                vbl <= 1;
+            end else if ( v == VBL_END ) begin
+                vbl <= 0;
+            end
+        end
+
         if ( v == VS_START ) begin
             vsync <= 1;
         end else if ( v == VS_END ) begin
