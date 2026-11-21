@@ -193,10 +193,9 @@ always_ff @(posedge clk) begin
         case (st)
             ST_IDLE: begin
                 z_hold_r <= 0;
-                // save / restore the slot selected before the request cycle
+                slot_l   <= ss_slot;  // save / restore the slot shown when the request is accepted
                 if (ss_save)      st <= ST_SAVE_PARKZ;
                 else if (ss_load) begin st <= ST_LOAD_READ; ss_read <= 1; z_hold_r <= 1; end
-                else              slot_l <= ss_slot;
             end
 
             ST_SAVE_PARKZ:
