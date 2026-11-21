@@ -8,6 +8,8 @@ module snk68_ss (
     input             ss_save,
     input             ss_load,
     input       [1:0] ss_slot,
+    output reg        ss_saved,      // one-cycle pulse: the save finished writing slot ss_saved_slot
+    output      [1:0] ss_saved_slot,
 
     ddr_if.to_host    ddr,
     ssbus_if.master   ssbus,
@@ -112,6 +114,7 @@ wire        load_ovr  = st == ST_LOAD_68RST || st == ST_LOAD_68RUN || st == ST_L
 wire        ssp_lo_wr = ~m68k_as_n & ~m68k_rw & ds & in_hdl & m68k_a[1];
 
 assign active  = st != ST_IDLE;
+assign ss_saved_slot = slot_l;
 assign opl_run = st == ST_LOAD_OPL;
 // the 68000 ROM cache restarts empty while the 68000 waits at the sync point, on save and on restore
 assign cache_flush = st == ST_SAVE_SYNC || st == ST_LOAD_68SYNC;
@@ -180,6 +183,7 @@ always_ff @(posedge clk) begin
     rp_start      <= 0;
     z_dirset      <= 0;
     hd_start      <= 0;
+    ss_saved      <= 0;
     if (reset) begin
         st       <= ST_IDLE;
         ss_write <= 0;
@@ -189,7 +193,7 @@ always_ff @(posedge clk) begin
         case (st)
             ST_IDLE: begin
                 z_hold_r <= 0;
-                // keep the slot from before the request: the UI advances it in the request cycle
+                // save / restore the slot selected before the request cycle
                 if (ss_save)      st <= ST_SAVE_PARKZ;
                 else if (ss_load) begin st <= ST_LOAD_READ; ss_read <= 1; z_hold_r <= 1; end
                 else              slot_l <= ss_slot;
@@ -218,7 +222,7 @@ always_ff @(posedge clk) begin
 
             ST_SAVE_WRITE:
                 if (ss_busy & ss_write) ss_write <= 0;
-                else if (~ss_busy & ~ss_write) st <= ST_SAVE_SYNC;
+                else if (~ss_busy & ~ss_write) begin ss_saved <= 1; st <= ST_SAVE_SYNC; end
 
             ST_SAVE_SYNC:
                 if (vpos == vpos_saved) st <= ST_SAVE_EXIT;

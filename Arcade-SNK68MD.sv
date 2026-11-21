@@ -1912,8 +1912,8 @@ sdram #(.CLK_FREQ( (CLKSYS+0.0))) sdram
 //////////////////////////////////////////////////////////////////
 // Save states
 
-wire        ss_save, ss_load, ss_status_set, ss_info_req;
-wire  [1:0] ss_slot;
+wire        ss_save, ss_load, ss_status_set, ss_info_req, ss_saved;
+wire  [1:0] ss_slot, ss_saved_slot;
 wire  [7:0] ss_info;
 wire        ss_active, ss_hold68, ss_run68, ss_reset68, ss_ipl7, ss_ovr_hit;
 wire [15:0] ss_ovr_data;
@@ -1927,34 +1927,23 @@ wire [21:0] ss_vpos;
 // joystick directions of the pad that holds L, keyboard F1 / Alt only (F2-F4 are Test / Reset here)
 wire        joy_ss   = joy0_full[12] | joy1_full[12];
 wire  [3:0] joy_ssd  = ( joy0_full[12] ? joy0_full[3:0] : 4'd0 ) | ( joy1_full[12] ? joy1_full[3:0] : 4'd0 );
-// F1 reaches the UI as the F key of the selected slot, so F1 / Alt-F1 use that slot
-wire  [7:0] ss_fkey  = ( ss_slot == 2'd0 ) ? 8'h05 : ( ss_slot == 2'd1 ) ? 8'h06 : ( ss_slot == 2'd2 ) ? 8'h04 : 8'h0c;
-wire [10:0] ss_ps2_key = ( ps2_key[7:0] == 8'h05 ) ? { ps2_key[10:8], ss_fkey } :
-                         ( ps2_key[7:0] == 8'h11 ) ? ps2_key : { ss_key_tgl, ps2_key[9:0] };
-reg         ss_key_tgl;
-always @(posedge clk_sys) if ( ps2_key[7:0] == 8'h05 || ps2_key[7:0] == 8'h11 ) ss_key_tgl <= ps2_key[10];
 
-savestate_ui #(.INFO_TIMEOUT_BITS(25)) savestate_ui (
+snk68_ss_ui snk68_ss_ui (
     .clk            ( clk_sys ),
-    .ps2_key        ( ss_ps2_key ),
-    .allow_ss       ( 1'b1 ),
-    .joySS          ( joy_ss ),
-    .joyRight       ( joy_ssd[0] ),
-    .joyLeft        ( joy_ssd[1] ),
-    .joyDown        ( joy_ssd[2] ),
-    .joyUp          ( joy_ssd[3] ),
-    .joyStart       ( 1'b0 ),
-    .joyRewind      ( 1'b0 ),
-    .rewindEnable   ( 1'b0 ),
+    .ps2_key        ( ps2_key ),
+    .joy_ss         ( joy_ss ),
+    .joy_ssd        ( joy_ssd ),
     .status_slot    ( status[65:64] ),
-    .autoincslot    ( status[66] ),
-    .OSD_saveload   ( status[68:67] ),
+    .autoinc        ( status[66] ),
+    .osd_saveload   ( status[68:67] ),
+    .saved          ( ss_saved ),
+    .saved_slot     ( ss_saved_slot ),
     .ss_save        ( ss_save ),
     .ss_load        ( ss_load ),
-    .ss_info_req    ( ss_info_req ),
-    .ss_info        ( ss_info ),
-    .statusUpdate   ( ss_status_set ),
-    .selected_slot  ( ss_slot )
+    .info_req       ( ss_info_req ),
+    .info           ( ss_info ),
+    .status_set     ( ss_status_set ),
+    .slot           ( ss_slot )
 );
 
 ssbus_if ssbus();
@@ -1972,6 +1961,8 @@ snk68_ss snk68_ss (
     .ss_save        ( ss_save ),
     .ss_load        ( ss_load ),
     .ss_slot        ( ss_slot ),
+    .ss_saved       ( ss_saved ),
+    .ss_saved_slot  ( ss_saved_slot ),
     .ddr            ( ddr_ss ),
     .ssbus          ( ssbus ),
     .ss_ssp         ( ssb[0] ),

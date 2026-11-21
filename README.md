@@ -114,6 +114,8 @@ SNKI/O   | A7007 (IK3) / A8007 (SAR) | [**SNK I/O**](https://github.com/va7deo/S
 
 - Hold **L** on either pad: **Down** saves, **Up** restores, **Left / Right** change the slot (4 slots). Keyboard: Alt+F1 saves to
   the selected slot, F1 restores it. The OSD has Savestate Slot, Autoincrement Slot, Save state and Restore state.
+- With Autoincrement Slot on, the selection moves to the next slot once a save has been written (pad, keyboard or OSD). A save or
+  restore request made while another one is still running is ignored and leaves the selection as it is.
 - Saved: 68000 registers, work, sprite, text and palette RAM, Z80 registers and RAM, board latches, the YM3812 registers and the
   rotary positions. A sample the uPD7759 is playing at the moment of the save is not restored.
 

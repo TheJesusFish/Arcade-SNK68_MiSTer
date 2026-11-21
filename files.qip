@@ -2,6 +2,7 @@
 set_global_assignment -name SDC_FILE Arcade-SNK68MD.sdc
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/savestate/system_consts.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/snk68_ss.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/snk68_ss_ui.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/hiscore.sv
 set_global_assignment -name SYSTEMVERILOG_FILE Arcade-SNK68MD.sv
 set_global_assignment -name VERILOG_FILE rtl/chip_select.v
