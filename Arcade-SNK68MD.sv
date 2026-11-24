@@ -1064,7 +1064,7 @@ chip_select cs (
 
     // 68k bus
     .m68k_a,
-    .m68k_as_n,
+    .m68k_as_n ( m68k_as_n | ss_park68 ), // no chip selects from a 68000 a restore is replacing
     .m68k_rw,
 
     .z80_addr,
@@ -1175,7 +1175,8 @@ reg fx68_phi1_en;
 reg fx68_phi2_en;
 
 always @(posedge clk_sys) begin
-    if ( clk_18M == 1 && !ss_hold68 ) begin
+    // one toggle per enabled 18 MHz step, so phi1 / phi2 keep alternating across pause and save-state stops
+    if ( clk18_count == 6'd0 && run_68k ) begin
         fx68_phi1 <= ~fx68_phi1;
     end
     fx68_phi1_en <= ( clk18_count == 6'd3 ) &  fx68_phi1;
@@ -1915,7 +1916,7 @@ sdram #(.CLK_FREQ( (CLKSYS+0.0))) sdram
 wire        ss_save, ss_load, ss_status_set, ss_info_req, ss_saved;
 wire  [1:0] ss_slot, ss_saved_slot;
 wire  [7:0] ss_info;
-wire        ss_active, ss_hold68, ss_run68, ss_reset68, ss_ipl7, ss_ovr_hit;
+wire        ss_active, ss_hold68, ss_run68, ss_reset68, ss_ipl7, ss_ovr_hit, ss_park68;
 wire [15:0] ss_ovr_data;
 wire        ss_z_hold, ss_z_reset, ss_z_dirset, ss_snd_reset, ss_opl_run, ss_opl_replay;
 wire        ss_board_load, ss_nmi_retrigger, ss_cache_flush;
@@ -1992,6 +1993,7 @@ snk68_ss snk68_ss (
     .opl_replay     ( ss_opl_replay ),
     .opl_replay_busy( opl_rp_busy ),
     .active         ( ss_active ),
+    .park68         ( ss_park68 ),
     .cache_flush    ( ss_cache_flush ),
     .board_load     ( ss_board_load ),
     .nmi_retrigger  ( ss_nmi_retrigger )

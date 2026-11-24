@@ -38,5 +38,5 @@ set_global_assignment -name QIP_FILE rtl/modules/T80/T80.qip
 # Yamaha YM3812: https://github.com/jotego/jtopl @ f96ff3ef16311e677b8bccc429b1b8f9a4e53276 (Jose Tejada, GPL-3.0), unmodified
 set_global_assignment -name QIP_FILE rtl/modules/jtopl/target/quartus/jt26.qip
 
-# NEC uPD7759: https://github.com/jotego/jt7759 @ c23dc9fd3605cb183991ad3806a258a9e941041f (Jose Tejada, GPL-3.0), unmodified
+# NEC uPD7759: https://github.com/jotego/jt7759 @ 94b472c002e29798c5ac719d860f83633b825156 (Jose Tejada, GPL-3.0), unmodified
 set_global_assignment -name QIP_FILE rtl/modules/jt7759/hdl/jt7759.qip

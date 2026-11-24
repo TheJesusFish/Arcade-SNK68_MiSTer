@@ -50,6 +50,7 @@ module snk68_ss (
     input             opl_replay_busy,
 
     output            active,
+    output            park68,
     output            cache_flush,
     output reg        board_load,
     output reg        nmi_retrigger
@@ -57,7 +58,7 @@ module snk68_ss (
 
 typedef enum logic [3:0] {
     ST_IDLE,
-    ST_SAVE_PARKZ,
+    ST_PARKZ,
     ST_SAVE_IRQ,
     ST_SAVE_SSP,
     ST_SAVE_HDR,
@@ -100,6 +101,7 @@ reg         z_hold_r;
 reg         rp_start;
 reg         got_state;
 reg         hd_start, hd_done;
+reg         loading;
 
 wire        ds        = ~m68k_uds_n | ~m68k_lds_n;
 wire        in_hdl    = m68k_a[23:5] == 19'h1f800;
@@ -114,6 +116,8 @@ wire        load_ovr  = st == ST_LOAD_68RST || st == ST_LOAD_68RUN || st == ST_L
 wire        ssp_lo_wr = ~m68k_as_n & ~m68k_rw & ds & in_hdl & m68k_a[1];
 
 assign active  = st != ST_IDLE;
+// restore: the board ignores the 68000's unfinished bus cycle from the first restored write until the 68000 restarts
+assign park68  = st == ST_LOAD_SNDRST || st == ST_LOAD_OPL || st == ST_LOAD_Z80 || st == ST_LOAD_68RST;
 assign ss_saved_slot = slot_l;
 assign opl_run = st == ST_LOAD_OPL;
 // the 68000 ROM cache restarts empty while the 68000 waits at the sync point, on save and on restore
@@ -121,7 +125,7 @@ assign cache_flush = st == ST_SAVE_SYNC || st == ST_LOAD_68SYNC;
 assign ovr_hit = (save_ovr | load_ovr) & ~m68k_as_n & ds & m68k_rw &
                  (in_hdl | (save_ovr & in_vec) | (load_ovr & in_rst));
 // Z80 stops on the cycle its M1 falls (T1 of an opcode fetch)
-assign z_hold  = z_hold_r | (st == ST_SAVE_PARKZ & m1_l & ~z80_m1_n);
+assign z_hold  = z_hold_r | (st == ST_PARKZ & m1_l & ~z80_m1_n);
 
 always_comb begin
     ovr_data = 16'h0000;
@@ -142,7 +146,7 @@ always_comb begin
     hold68 = 0; run68 = 0; reset68 = 0; ipl7 = 0;
     z_reset = 0; snd_reset = 0;
     case (st)
-        ST_SAVE_PARKZ:  hold68 = 1;
+        ST_PARKZ:       hold68 = 1;
         ST_SAVE_IRQ:    begin run68 = 1; ipl7 = 1; end
         ST_SAVE_SSP:    run68 = 1;
         ST_SAVE_HDR:    hold68 = 1;
@@ -194,12 +198,17 @@ always_ff @(posedge clk) begin
             ST_IDLE: begin
                 z_hold_r <= 0;
                 slot_l   <= ss_slot;  // save / restore the slot shown when the request is accepted
-                if (ss_save)      st <= ST_SAVE_PARKZ;
-                else if (ss_load) begin st <= ST_LOAD_READ; ss_read <= 1; z_hold_r <= 1; end
+                if (ss_save)      begin st <= ST_PARKZ; loading <= 0; end
+                else if (ss_load) begin st <= ST_PARKZ; loading <= 1; end
             end
 
-            ST_SAVE_PARKZ:
-                if (z_hold) begin z_hold_r <= 1; st <= ST_SAVE_IRQ; end
+            // save and restore both wait for the Z80's next opcode fetch, so no Z80 write is in flight
+            ST_PARKZ:
+                if (z_hold) begin
+                    z_hold_r <= 1;
+                    if (loading) begin st <= ST_LOAD_READ; ss_read <= 1; end
+                    else st <= ST_SAVE_IRQ;
+                end
 
             ST_SAVE_IRQ:
                 if (iack7) st <= ST_SAVE_SSP;
