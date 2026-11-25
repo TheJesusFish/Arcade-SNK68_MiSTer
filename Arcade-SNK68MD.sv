@@ -1340,10 +1340,9 @@ always @ (posedge clk_sys) begin
                 upd_start_flag <= 0;
             end
             
+            // port 0x80 latches D7 (LS74); the uPD7759 is held in reset while it is 0
             if ( z80_upd_r_cs == 1 ) begin
-                upd_reset <= 1;
-            end else begin
-                upd_reset <= 0;
+                upd_reset <= ~z80_dout[7];
             end
             
             if ( z80_latch_cs == 1 ) begin
@@ -1424,10 +1423,11 @@ jt7759 upd
     .sound(upd_sample_out)  //output signed [ 8:0]
 );
 
+// mix audio: the sum takes 17 bits before halving, so loud overlaps can't wrap
+wire signed [16:0] snd_sum = sample + upd_sample;
 always @ * begin
-    // mix audio
-    AUDIO_L <= ( sample + upd_sample ) >>> 1;
-    AUDIO_R <= ( sample + upd_sample ) >>> 1;
+    AUDIO_L <= snd_sum[16:1];
+    AUDIO_R <= snd_sum[16:1];
 end
 
 reg [7:0] dac1;
