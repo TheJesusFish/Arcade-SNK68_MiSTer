@@ -22,10 +22,18 @@ function [7:0] slot_key(input [1:0] s);
 endfunction
 
 // F1 reaches the UI as the F key of the selected slot, so F1 / Alt-F1 use that slot
-reg         key_tgl;
-wire [10:0] key = ( ps2_key[7:0] == 8'h05 ) ? { ps2_key[10:8], slot_key(slot) } :
-                  ( ps2_key[7:0] == 8'h11 ) ? ps2_key : { key_tgl, ps2_key[9:0] };
-always @(posedge clk) if ( ps2_key[7:0] == 8'h05 || ps2_key[7:0] == 8'h11 ) key_tgl <= ps2_key[10];
+// F1 / Alt events are forwarded with their own toggle, so other keys' events in between can't hide one
+reg         ps2_l = 0, fwd_tgl = 0;
+reg   [9:0] fwd_key = 0;
+wire        fwd_ev = ( ps2_key[10] != ps2_l ) && ( ps2_key[7:0] == 8'h05 || ps2_key[7:0] == 8'h11 );
+always @(posedge clk) begin
+    ps2_l <= ps2_key[10];
+    if ( fwd_ev ) begin
+        fwd_tgl <= ~fwd_tgl;
+        fwd_key <= ( ps2_key[7:0] == 8'h05 ) ? { ps2_key[9:8], slot_key(slot) } : ps2_key[9:0];
+    end
+end
+wire [10:0] key = { fwd_tgl, fwd_key };
 
 // Autoincrement: a finished save selects the next slot as a released F key, in a cycle without a real key event
 reg         inc_pend = 0, inc_par = 0, key10_l = 0;

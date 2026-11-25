@@ -60,7 +60,7 @@ module snk68_ss (
     output reg        nmi_retrigger
 );
 
-typedef enum logic [3:0] {
+typedef enum logic [4:0] {
     ST_IDLE,
     ST_PARKZ,
     ST_SAVE_IRQ,
@@ -76,7 +76,8 @@ typedef enum logic [3:0] {
     ST_LOAD_68RST,
     ST_LOAD_68RUN,
     ST_LOAD_68SYNC,
-    ST_LOAD_68EXIT
+    ST_LOAD_68EXIT,
+    ST_LOAD_CHECK
 } ss_state_t;
 
 ss_state_t st = ST_IDLE;
@@ -110,6 +111,7 @@ reg         rp_start;
 reg         got_state;
 reg         hd_start, hd_done;
 reg         loading;
+wire        chk_ok;
 
 wire        ds        = ~m68k_uds_n | ~m68k_lds_n;
 wire        in_hdl    = m68k_a[23:5] == 19'h1f800;
@@ -163,6 +165,7 @@ always_comb begin
         ST_SAVE_WRITE:  hold68 = 1;
         ST_SAVE_SYNC:   hold68 = 1;
         ST_SAVE_EXIT:   run68 = 1;
+        ST_LOAD_CHECK:  hold68 = 1;
         ST_LOAD_READ:   hold68 = 1;
         ST_LOAD_SNDRST: begin hold68 = 1; z_reset = 1; snd_reset = 1; end
         ST_LOAD_OPL:    begin hold68 = 1; z_reset = 1; end
@@ -230,7 +233,7 @@ always_ff @(posedge clk) begin
             ST_PARKZ:
                 if (z_hold) begin
                     z_hold_r <= 1;
-                    if (loading) begin st <= ST_LOAD_READ; ss_read <= 1; end
+                    if (loading) begin st <= ST_LOAD_CHECK; ss_read <= 1; end
                     else st <= ST_SAVE_IRQ;
                 end
 
@@ -262,7 +265,14 @@ always_ff @(posedge clk) begin
             ST_SAVE_EXIT:
                 if (prog_rd & ~in_hdl) st <= ST_IDLE;
 
-            // an empty slot delivers no chunks: both CPUs simply resume
+            // verify pass: the state is read with every write withheld; an incomplete or empty one lets both CPUs resume untouched
+            ST_LOAD_CHECK:
+                if (ss_busy & ss_read) ss_read <= 0;
+                else if (~ss_busy & ~ss_read) begin
+                    if (chk_ok) begin st <= ST_LOAD_READ; ss_read <= 1; end
+                    else st <= ST_IDLE;
+                end
+
             ST_LOAD_READ:
                 if (ss_busy & ss_read) ss_read <= 0;
                 else if (~ss_busy & ~ss_read) begin
@@ -365,6 +375,8 @@ always_ff @(posedge clk) begin
     endcase
 end
 
+ssbus_if ssi();
+
 save_state_data save_state_data (
     .clk(clk),
     .reset(reset),
@@ -373,8 +385,55 @@ save_state_data save_state_data (
     .write_start(ss_write),
     .index(slot_l),
     .busy(ss_busy),
-    .ssbus(ssbus)
+    .ssbus(ssi)
 );
+
+// verify pass: writes go to no chunk and are acknowledged here; queries still reach the chunks, which report their sizes
+localparam int NCHK = 9;
+wire        dry = st == ST_LOAD_CHECK;
+reg         dry_ack, qry_l;
+assign ssbus.data   = ssi.data;
+assign ssbus.addr   = ssi.addr;
+assign ssbus.select = ssi.select;
+assign ssbus.query  = ssi.query;
+assign ssbus.read   = ssi.read;
+assign ssbus.write  = ssi.write & ~dry;
+assign ssi.data_out = ssbus.data_out;
+// memory_stream raises write with query while a chunk reports its size; only data writes (no query) are acknowledged here
+wire        dry_wr = dry & ssi.write & ~ssi.query;
+assign ssi.ack      = dry_wr ? dry_ack : ssbus.ack;
+
+// a state passes when every chunk 0-8 has one header and all of its words, and no other header appears
+reg   [1:0] chk_q   [NCHK];
+reg  [19:0] chk_cnt [NCHK];
+reg  [19:0] chk_wr  [NCHK];
+reg         chk_bad;
+logic       chk_ok_c;
+wire        sel_ok = ssi.select < NCHK;
+wire  [3:0] sel_i  = ssi.select[3:0];
+always_ff @(posedge clk) begin
+    dry_ack <= dry_wr & ~dry_ack;
+    qry_l   <= ssi.query;
+    if (st == ST_PARKZ) begin
+        chk_bad <= 0;
+        for (int i = 0; i < NCHK; i++) begin chk_q[i] <= 0; chk_cnt[i] <= 0; chk_wr[i] <= 0; end
+    end else if (dry) begin
+        // a header ends when query falls (answered or timed out); memory_stream can leave query high after a save, so no rising edge
+        if (~ssi.query & qry_l) begin
+            if (!sel_ok) chk_bad <= 1;
+            else if (chk_q[sel_i] != 2'd3) chk_q[sel_i] <= chk_q[sel_i] + 2'd1;
+        end
+        if (ssi.query & ssbus.ack & sel_ok) chk_cnt[sel_i] <= ssbus.data_out[19:0];
+        if (dry_ack & sel_ok) chk_wr[sel_i] <= chk_wr[sel_i] + 20'd1;
+    end
+end
+
+always_comb begin
+    chk_ok_c = ~chk_bad;
+    for (int i = 0; i < NCHK; i++)
+        if (chk_q[i] != 2'd1 || chk_wr[i] != chk_cnt[i] || chk_cnt[i] == 20'd0) chk_ok_c = 0;
+end
+assign chk_ok = chk_ok_c;
 
 endmodule
 

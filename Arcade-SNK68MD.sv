@@ -83,7 +83,7 @@ localparam CONF_STR = {
     "P1O[9:8],Aspect Ratio,Original,Full Screen,[ARC1],[ARC2];",
     "H2P1O[3],Orientation,Vert,Horz;",
     "P1-;",
-    "P1O[6:4],Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%,CRT 100%;",
+    "P1O[6:4],Scandoubler Fx,None,HQ2x,CRT 25%,CRT 50%,CRT 75%;",
     "P1O[10],Force Scandoubler,Off,On;",
     "P1-;",
     "P1O[27:24],H-sync Pos Adj,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
@@ -374,6 +374,10 @@ wire rot1_ccw = joy0[8] | key_ls30_p1[1];
 wire rot2_cw  = joy1[7] | key_ls30_p2[0];
 wire rot2_ccw = joy1[8] | key_ls30_p2[1];
 
+// gamepad mode needs exactly one dial position set (LS-30 mode or a state saved in it can leave none or several)
+wire rot1_ok = rotary1 != 12'd0 && ( rotary1 & ( rotary1 - 12'd1 ) ) == 12'd0;
+wire rot2_ok = rotary2 != 12'd0 && ( rotary2 & ( rotary2 - 12'd1 ) ) == 12'd0;
+
 always @ (posedge clk_sys) begin
     if ( reset == 1 ) begin
         rotary1 <= 12'h1 ;
@@ -382,9 +386,11 @@ always @ (posedge clk_sys) begin
         rotary1 <= ss_board[35:24];
         rotary2 <= ss_board[47:36];
     end else begin
-        if ( p1_rotary_controller_type == 0 ) begin
+        if ( p1_rotary_controller_type == 0 && !rot1_ok ) begin
+            rotary1 <= 12'h1;
+        end else if ( p1_rotary_controller_type == 0 ) begin
             // did the button state change?
-            if ( rot1_cw != last_rot1_cw ) begin 
+            if ( rot1_cw != last_rot1_cw ) begin
                 last_rot1_cw <= rot1_cw;
                 // rotate right
                 if ( rot1_cw == 1 ) begin
@@ -403,7 +409,9 @@ always @ (posedge clk_sys) begin
             rotary1 <= key_ls30_p1;
         end
 
-        if ( p2_rotary_controller_type == 0 ) begin
+        if ( p2_rotary_controller_type == 0 && !rot2_ok ) begin
+            rotary2 <= 12'h1;
+        end else if ( p2_rotary_controller_type == 0 ) begin
             if ( rot2_cw != last_rot2_cw ) begin
                 last_rot2_cw <= rot2_cw;
                 if ( rot2_cw == 1 ) begin
@@ -649,7 +657,8 @@ assign DDRAM_DIN      = ddr_host.wdata;
 assign DDRAM_BURSTCNT = ddr_host.burstcnt;
 assign ddr_host.rdata       = DDRAM_DOUT;
 assign ddr_host.rdata_ready = DDRAM_DOUT_READY;
-assign ddr_host.busy        = DDRAM_BUSY;
+// wait-request only while a command is presented, so read data returning on a busy cycle still reaches memory_stream
+assign ddr_host.busy        = DDRAM_BUSY & ( ddr_host.read | ddr_host.write );
 
 reg [7:0] hc_del;
 
@@ -700,6 +709,9 @@ wire  [3:0] spr_pen = { spr_pix_data[spr_pen_idx3],
                         spr_pix_data[spr_pen_idx0] }  ;
 
 //reg [3:0] sprite_col_idx_flipped ;
+
+// layers 0-2 draw groups 2, 3, 1 (F8, F9, F10)
+wire spr_layer_en = ( sprite_layer == 0 ) ? gfx_bg_en : ( sprite_layer == 1 ) ? gfx_fg_en : gfx_sp_en;
 
 always @ (posedge clk_sys) begin
     if ( reset == 1 ) begin
@@ -808,12 +820,10 @@ always @ (posedge clk_sys) begin
             sprite_col_x <= sprite_ram_dout;
             sprite_state <= 4;
         end else if ( sprite_state == 4 )  begin
-            if ( sprite_col_x[7:0] > 16 ) begin
-                sprite_state <= 17;
-            end
             // y valid
             sprite_col_y <= sprite_ram_dout;
-            sprite_state <= 5;
+            // F8-F10 skip the columns of a layer switched off
+            sprite_state <= spr_layer_en ? 5'd5 : 5'd17;
         end else if ( sprite_state == 5 )  begin
             // tile ofset from the top of the column
             sprite_col_idx <= sp_y + sprite_col_y[8:0] ;
@@ -915,6 +925,10 @@ reg [23:0] rgb_sp;
 
 reg [10:0] pen;
 reg pen_valid;
+reg pen_bd;
+
+// the text pixel shows when nonzero or opaque (bit 7, board type 0), unless F7 switched the text layer off
+wire fg_show = gfx_tx_en && ( fg[3:0] != 0 || ( pcb == 0 && fg[7] ) );
 
 always @ (posedge clk_sys) begin
     if ( reset == 1 ) begin
@@ -926,9 +940,11 @@ always @ (posedge clk_sys) begin
                 fg <= line_buf_fg_out[10:0] ;
                 sp <= spr_buf_dout[10:0] ;
             end else if ( clk6_count == 3 ) begin
-                pen <= ( fg[3:0] == 0 && ( pcb == 1 || pcb == 2 || fg[7] == 0 ) ) ? sp[10:0] : fg[6:0];
+                pen    <= fg_show ? fg[6:0] : sp[10:0];
+                // backdrop only where neither layer draws (an opaque text pixel keeps its own colour 0)
+                pen_bd <= !fg_show && sp[3:0] == 0;
             end else if ( clk6_count == 5 ) begin
-                if ( pen[3:0] == 0 ) begin
+                if ( pen_bd ) begin
                     tile_pal_addr <= 11'h7ff ; // background pen
                 end else begin
                     tile_pal_addr <= pen[10:0] ;
@@ -994,8 +1010,9 @@ always @ (posedge clk_sys) begin
             // write asserted and rising cpu clock
             if ( m68k_rw == 0 ) begin        
             
+                // the sound latch (LS374 B15) takes the 68000's upper data byte
                 if ( m68k_latch_cs == 1 ) begin
-                    m68k_latch <= m68k_dout[7:0];
+                    m68k_latch <= m68k_dout[15:8];
                     if ( !nmi_taken ) z80_nmi_n <= 0 ;
                 end
                 
@@ -1146,8 +1163,7 @@ wire m68k_vpa_n = ~int_ack;//( m68k_lds_n == 0 && m68k_fc == 3'b111 ); // int ac
 reg int_ack ;
 reg [1:0] vbl_sr;
 
-// vblank handling 
-// process interrupt and sprite buffering
+// vblank handling: the 68000 vblank interrupt (the sprite engine reads sprite RAM live; there is no sprite buffer)
 always @ (posedge clk_sys ) begin
     if ( reset == 1 ) begin
         m68k_ipl0_n <= 1 ;
@@ -1164,7 +1180,6 @@ always @ (posedge clk_sys ) begin
         end else if ( ss_active ) begin
             // held while a save state runs
         end else if ( vbl_sr == 2'b01 ) begin // rising edge
-            // trigger sprite buffer copy
             //  68k vbl interrupt
             m68k_ipl0_n <= 0;
         end else if ( int_ack == 1 || vbl_sr == 2'b10 ) begin
@@ -1663,26 +1678,6 @@ wire [7:0] upd_dout ;
 wire [15:0] spr_pal_dout ;
 wire [15:0] m68k_spr_pal_dout ;
 
-reg  [8:0]  sprite_buffer_addr;  // 128 sprites
-reg  [63:0] sprite_buffer_din;
-wire [63:0] sprite_buffer_dout;
-reg  sprite_buffer_w;
-
-dual_port_ram #(.LEN(512), .DATA_WIDTH(64)) sprite_buffer (
-    .clock_a ( clk_sys ),
-    .address_a ( sprite_buffer_addr ),
-    .wren_a ( 1'b0 ),
-    .data_a ( ),
-    .q_a ( sprite_buffer_dout ),
-    
-    .clock_b ( clk_sys ),
-    .address_b ( sprite_buffer_addr ),
-    .wren_b ( sprite_buffer_w ),
-    .data_b ( sprite_buffer_din  ),
-    .q_b( )
-
-    );
-    
 reg          line_buf_fg_w;
 reg   [9:0]  line_buf_addr_w;
 reg   [9:0]  line_buf_addr_r ; 

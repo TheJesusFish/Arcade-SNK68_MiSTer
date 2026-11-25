@@ -39,14 +39,26 @@ wire       ul     = ioctl_upload & ioctl_index == 16'd4;
 
 reg  [9:0] tbl_ra;
 reg  [7:0] tbl_q;
+// an upload also keeps each byte it sends (once its address has been stable past the RAM read) as the table the next reset restores
+reg  [2:0] ul_d = 0;
+reg [26:0] ul_a1, ul_a2, ul_a3;
+// not while (or just after) a save state holds work-RAM port b: the byte read would be the stream's
+reg  [2:0] pb_d = 0;
+wire       ul_cap = ul_d[2] & ~port_busy & ~|pb_d & ioctl_addr < 1024 & ioctl_addr == ul_a1 & ioctl_addr == ul_a2 & ioctl_addr == ul_a3;
+wire       tbl_we = (ioctl_wr & dl_tbl & ioctl_addr < 1024) | ul_cap;
+wire [9:0] tbl_wa = ioctl_addr[9:0];
+wire [7:0] tbl_wd = ul_cap ? ram_q : ioctl_dout;
 always_ff @(posedge clk) begin
     tbl_q <= tbl[tbl_ra];
+    ul_d  <= {ul_d[1:0], ul};
+    pb_d  <= {pb_d[1:0], port_busy};
+    ul_a1 <= ioctl_addr; ul_a2 <= ul_a1; ul_a3 <= ul_a2;
     if (ioctl_wr & dl_ent & ioctl_addr < MAXE*8) begin
         ent[ioctl_addr[4:0]] <= ioctl_dout;
         if (ioctl_addr[2:0] == 3'd7) n_ent <= ioctl_addr[6:3] + 1'd1;
     end
-    if (ioctl_wr & dl_tbl & ioctl_addr < 1024) begin
-        tbl[ioctl_addr[9:0]] <= ioctl_dout;
+    if (tbl_we) begin
+        tbl[tbl_wa] <= tbl_wd;
         have_tbl <= 1;
     end
 end
