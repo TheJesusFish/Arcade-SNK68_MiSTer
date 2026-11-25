@@ -17,6 +17,9 @@
     Version: 1.0
     Date: 28-5-2022
 
+    Modified for Arcade-SNK68MD (2026-11-24): reset also clears the channel feedback (reg_fb), as the YM3812 does.
+    Source: https://github.com/jotego/jtopl @ f96ff3ef16311e677b8bccc429b1b8f9a4e53276, otherwise unmodified.
+
 */
 
 module jtopl_reg_ch(
@@ -103,6 +106,7 @@ always @(posedge clk, posedge rst) begin
         for( i=0; i<9; i=i+1 ) begin
             reg_block[i] <= 0;
             reg_fnum [i] <= 0;
+            reg_fb   [i] <= 0;
         end
     end else if(cen) begin
         i = 0;

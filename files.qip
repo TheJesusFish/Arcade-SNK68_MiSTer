@@ -35,7 +35,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/modules/fx68k/uaddrPla.sv
 # @ 90a8350c4e7fafb64067cf777b58a93bc7511fdc, unmodified
 set_global_assignment -name QIP_FILE rtl/modules/T80/T80.qip
 
-# Yamaha YM3812: https://github.com/jotego/jtopl @ f96ff3ef16311e677b8bccc429b1b8f9a4e53276 (Jose Tejada, GPL-3.0), unmodified
+# Yamaha YM3812: https://github.com/jotego/jtopl @ f96ff3ef16311e677b8bccc429b1b8f9a4e53276 (Jose Tejada, GPL-3.0); modified: hdl/jtopl_reg_ch.v reset clears the channel feedback
 set_global_assignment -name QIP_FILE rtl/modules/jtopl/target/quartus/jt26.qip
 
 # NEC uPD7759: https://github.com/jotego/jt7759 @ 94b472c002e29798c5ac719d860f83633b825156 (Jose Tejada, GPL-3.0), unmodified

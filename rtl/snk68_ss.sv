@@ -39,6 +39,10 @@ module snk68_ss (
 
     // Z80
     input             z80_m1_n,
+    input             z80_mreq_n,
+    input             z80_nmi_n,
+    input             z80_cen,
+    input       [7:0] z80_din,
     output            z_hold,
     output reg        z_reset,
     output reg        z_dirset,
@@ -97,6 +101,10 @@ reg         ss_write, ss_read;
 wire        ss_busy;
 reg   [6:0] cnt;
 reg         m1_l;
+reg   [7:0] z_op;
+reg         zp_m1, zp_t2, zp_park;
+reg   [1:0] zstep;
+reg         zstep_on;
 reg         z_hold_r;
 reg         rp_start;
 reg         got_state;
@@ -124,8 +132,10 @@ assign opl_run = st == ST_LOAD_OPL;
 assign cache_flush = st == ST_SAVE_SYNC || st == ST_LOAD_68SYNC;
 assign ovr_hit = (save_ovr | load_ovr) & ~m68k_as_n & ds & m68k_rw &
                  (in_hdl | (save_ovr & in_vec) | (load_ovr & in_rst));
-// Z80 stops on the cycle its M1 falls (T1 of an opcode fetch)
-assign z_hold  = z_hold_r | (st == ST_PARKZ & m1_l & ~z80_m1_n);
+// Z80 stops in T2 of an opcode fetch, after T80 has written the previous instruction's last result at the end of T1
+assign z_hold  = (z_hold_r & ~zstep_on) | (st == ST_PARKZ & zp_park);
+// unsafe after a prefix byte, or after EI (T80 sets IFF1 / IFF2 at the end of T2 of the next M1)
+wire        z_pfx   = z_op == 8'hcb || z_op == 8'hdd || z_op == 8'hed || z_op == 8'hfd || z_op == 8'hfb;
 
 always_comb begin
     ovr_data = 16'h0000;
@@ -182,6 +192,20 @@ end
 
 always_ff @(posedge clk) begin
     m1_l          <= z80_m1_n;
+    // park in an opcode fetch (not an interrupt acknowledge, not after a prefix, NMI clear) once its T1 step and CEN_n have passed
+    if (reset | z_reset) z_op <= 8'h00;
+    else if (~z80_m1_n & ~z80_mreq_n) z_op <= z80_din;
+    zp_t2         <= 0;
+    zp_park       <= st == ST_PARKZ & (zp_park | zp_t2);
+    if (st != ST_PARKZ) zp_m1 <= 0;
+    else if (m1_l & ~z80_m1_n) zp_m1 <= ~z_pfx & z80_nmi_n;
+    else if (zp_m1 & z80_cen) begin zp_m1 <= 0; zp_t2 <= ~z80_mreq_n; end
+    // restore: the reloaded Z80 takes two T80 steps (reset to T1, T1 to T2), to where the saved Z80 stopped, then waits again
+    if (reset | st == ST_IDLE) zstep_on <= 0;
+    else if (zstep_on) begin
+        if (z80_cen) zstep <= zstep + 1'd1;
+        if (zstep == 2'd2) zstep_on <= 0;
+    end
     board_load    <= 0;
     nmi_retrigger <= 0;
     rp_start      <= 0;
@@ -264,7 +288,7 @@ always_ff @(posedge clk) begin
             ST_LOAD_Z80: begin
                 z_dirset <= 1;
                 cnt <= cnt + 1'd1;
-                if (cnt == 7'd15) begin cnt <= 0; st <= ST_LOAD_68RST; end
+                if (cnt == 7'd15) begin cnt <= 0; zstep <= 0; zstep_on <= 1; st <= ST_LOAD_68RST; end
             end
 
             ST_LOAD_68RST:
@@ -410,6 +434,7 @@ endmodule
 // YM3812 register shadow (snooped writes) saved as 256 registers + selected register, replayed on restore
 module snk68_opl_shadow #(parameter SS_IDX = 8) (
     input             clk,
+    input             reset,
     ssbus_if.slave    ssbus,
     input             snoop_wr,
     input             snoop_a,
@@ -423,6 +448,8 @@ module snk68_opl_shadow #(parameter SS_IDX = 8) (
 reg  [7:0] mem [0:255];
 reg  [7:0] sel, sel_saved;
 reg  [7:0] q;
+reg [255:0] wrt;
+reg        qw;
 reg  [8:0] rp_reg;
 reg [11:0] rp_cnt;
 reg  [1:0] rp_ph;
@@ -432,7 +459,9 @@ reg        read_delay;
 wire       acc    = ssbus.access(SS_IDX);
 wire [8:0] caddr  = ssbus.addr[8:0];
 wire       cwr    = acc & ssbus.write & ~caddr[8];
-wire [7:0] raddr  = rp_on ? rp_reg[7:0] : caddr[7:0];
+// replay order 0-3, 5-255, then 4 (timer control), so the timers start at the end of the replay
+wire [7:0] rp_idx = rp_reg[7:0] < 8'd4 ? rp_reg[7:0] : rp_reg[7:0] == 8'd255 ? 8'd4 : rp_reg[7:0] + 8'd1;
+wire [7:0] raddr  = rp_on ? rp_idx : caddr[7:0];
 
 assign busy = rp_on;
 
@@ -445,8 +474,17 @@ always_ff @(posedge clk) begin
     q <= mem[raddr];
 end
 
+// registers written since the game reset zeroed the chip; a save stores 0 for the others
 always_ff @(posedge clk) begin
-    if (snoop_wr & ~snoop_a) sel <= snoop_d;
+    if (reset) wrt <= '0;
+    else if (snoop_wr & snoop_a & ~snoop_keep) wrt[sel] <= 1'b1;
+    else if (cwr) wrt[caddr[7:0]] <= 1'b1;
+    qw <= wrt[raddr];
+end
+
+always_ff @(posedge clk) begin
+    if (reset) sel <= 8'd0;
+    else if (snoop_wr & ~snoop_a) sel <= snoop_d;
 
     ssbus.setup(SS_IDX, 264, 0);
     if (acc) begin
@@ -454,7 +492,7 @@ always_ff @(posedge clk) begin
             if (caddr == 9'd256) sel_saved <= ssbus.data[7:0];
             ssbus.write_ack(SS_IDX);
         end else if (ssbus.read) begin
-            if (read_delay) ssbus.read_response(SS_IDX, {56'd0, caddr[8] ? (caddr == 9'd256 ? sel : 8'd0) : q});
+            if (read_delay) ssbus.read_response(SS_IDX, {56'd0, caddr[8] ? (caddr == 9'd256 ? sel : 8'd0) : (qw ? q : 8'd0)});
             read_delay <= 1;
         end
     end else begin
@@ -465,7 +503,9 @@ end
 // replay: per register an address write, then a data write, each held 36 clk, then 2000 clk for the slot update
 always_ff @(posedge clk) begin
     rp_cs <= 0;
-    if (replay & ~rp_on) begin
+    // a game reset ends a replay, so it can't write into the reset chip or hold the Z80 off it
+    if (reset) rp_on <= 0;
+    else if (replay & ~rp_on) begin
         rp_on  <= 1;
         rp_reg <= 0;
         rp_ph  <= 0;
@@ -476,7 +516,7 @@ always_ff @(posedge clk) begin
             2'd0: begin
                 rp_cs <= rp_cnt < 12'd36;
                 rp_a  <= 0;
-                rp_d  <= rp_reg[8] ? sel_saved : rp_reg[7:0];
+                rp_d  <= rp_reg[8] ? sel_saved : rp_idx;
                 if (rp_cnt == 12'd80) begin
                     rp_cnt <= 0;
                     if (rp_reg[8]) rp_on <= 0;

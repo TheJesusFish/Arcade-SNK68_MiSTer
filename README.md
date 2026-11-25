@@ -28,7 +28,7 @@ MSM5205 in place of the uPD7759).
 |----|---------|--------|
 | [**fx68k**](https://github.com/ijor/fx68k) @ `0602ee4`                                                         | [**Motorola 68000 CPU**](https://en.wikipedia.org/wiki/Motorola_68000) | Jorge Cwik |
 | [**T80**](https://github.com/MiSTer-devel/NeoGeo_MiSTer/tree/master/rtl/cpu/T80) (NeoGeo_MiSTer `rtl/cpu/T80` @ `90a8350`) | [**Zilog Z80 CPU**](https://en.wikipedia.org/wiki/Zilog_Z80) | Daniel Wallner / MikeJ / Sorgelig |
-| [**jtopl**](https://github.com/jotego/jtopl) @ `f96ff3e`                                                      | [**Yamaha OPL 2**](https://en.wikipedia.org/wiki/Yamaha_OPL#OPL2)      | Jose Tejada |
+| [**jtopl**](https://github.com/jotego/jtopl) @ `f96ff3e` (`hdl/jtopl_reg_ch.v` modified: reset also clears the channel feedback, as the YM3812 does) | [**Yamaha OPL 2**](https://en.wikipedia.org/wiki/Yamaha_OPL#OPL2)      | Jose Tejada |
 | [**jt7759**](https://github.com/jotego/jt7759) @ `94b472c`                                                    | [**NEC uPD7759**](https://github.com/jotego/jt7759)                    | Jose Tejada |
 | [**Template_MiSTer sys/**](https://github.com/MiSTer-devel/Template_MiSTer) @ `d6324f2` (incl. yc_out)        | MiSTer framework                                                       | MiSTer-devel |
 | [**Arcade-TaitoF2_MiSTer**](https://github.com/MiSTer-devel/Arcade-TaitoF2_MiSTer) @ `9438df9` save-state code (`rtl/savestate/`: ddram, memory_stream, savestates, savestate_ui) | Save states | Martin Donlon |

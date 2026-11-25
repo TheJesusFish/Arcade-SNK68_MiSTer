@@ -448,6 +448,7 @@ reg [5:0] clk18_count;
 reg [5:0] clk6_count;
 reg [5:0] clk4_count;
 reg [15:0] clk_upd_count;
+reg        upd_short;
 
 
 always @ (posedge clk_sys) begin
@@ -479,14 +480,16 @@ always @ (posedge clk_sys) begin
         clk18_count <= clk18_count + 1;
     end
 
-    clk_upd <= ( clk_upd_count == 0 );
+    clk_upd <= ( clk_upd_count == 0 ) && pause_cpu == 0 && !ss_active;
 
-    // 72MHz / 113 == 637.168KHz.  should be 640.
-    // todo : use fractional divider 112.5  alternate between 112 & 113
-    if ( clk_upd_count == 16'd112 ) begin
-        clk_upd_count <= 16'd0;
-    end else if ( pause_cpu == 0 && !ss_active ) begin
-        clk_upd_count <= clk_upd_count + 1;
+    // 640 kHz = 72 MHz / 112.5: periods of 113 and 112 clocks alternate, and the count holds while paused or saving
+    if ( pause_cpu == 0 && !ss_active ) begin
+        if ( clk_upd_count == ( upd_short ? 16'd111 : 16'd112 ) ) begin
+            clk_upd_count <= 16'd0;
+            upd_short <= ~upd_short;
+        end else begin
+            clk_upd_count <= clk_upd_count + 1;
+        end
     end
 end
 
@@ -942,6 +945,7 @@ end
 reg spr_flip_orientation ;
 reg scr_flip ;
 reg [2:0] tile_offset;
+reg nmi_taken;
 
 /// 68k cpu
 always @ (posedge clk_sys) begin
@@ -949,6 +953,7 @@ always @ (posedge clk_sys) begin
     if ( reset == 1 ) begin
         m68k_dtack_n <= 1;
         z80_nmi_n <= 1 ;
+        nmi_taken <= 0;
         z80_irq_n <= 1 ;
         invert_input <= 0;
         m68k_latch <= 0;
@@ -991,7 +996,7 @@ always @ (posedge clk_sys) begin
             
                 if ( m68k_latch_cs == 1 ) begin
                     m68k_latch <= m68k_dout[7:0];
-                    z80_nmi_n <= 0 ;
+                    if ( !nmi_taken ) z80_nmi_n <= 0 ;
                 end
                 
                 if ( m68k_scr_flip_cs == 1 ) begin
@@ -1011,12 +1016,17 @@ always @ (posedge clk_sys) begin
         
         if ( clk_4M == 1 && z80_nmi_n == 0 && z80_addr == 16'h0066 ) begin
             z80_nmi_n <= 1;
+            // a save state held the 68000 mid-write while the Z80 took this NMI: the rest of that write must not raise another
+            nmi_taken <= !run_68k && !m68k_as_n;
+        end else if ( m68k_as_n ) begin
+            nmi_taken <= 0;
         end
 
         // save-state restore: board registers, then a fresh NMI edge if one was pending
         if ( ss_board_load ) begin
             m68k_latch           <= ss_board[7:0];
             z80_nmi_n            <= 1;
+            nmi_taken            <= 0;
             scr_flip             <= ss_board[17];
             spr_flip_orientation <= ss_board[18];
             tile_offset          <= ss_board[21:19];
@@ -1882,6 +1892,17 @@ wire        sdram_ack;
 wire        sdram_valid;
 wire [31:0] sdram_q;
 
+// SDRAM read data: one I/O-cell register per DQ pin samples every clk_sys edge, so sdram.vhd's two fabric copies drop out
+reg  [15:0] sdq_r, sdq_r2;
+reg  [31:0] sdq_hold;
+always @(posedge clk_sys) begin
+    sdq_r  <= SDRAM_DQ;
+    sdq_r2 <= sdq_r;
+    if ( sdram_valid ) sdq_hold <= { sdq_r2, sdq_r };
+end
+// q as sdram.vhd gives it: the first-word and read_done samples in the valid cycle, then held until the next read
+assign sdram_q = sdram_valid ? { sdq_r2, sdq_r } : sdq_hold;
+
 sdram #(.CLK_FREQ( (CLKSYS+0.0))) sdram
 (
   .reset(~pll_locked),
@@ -1895,7 +1916,7 @@ sdram #(.CLK_FREQ( (CLKSYS+0.0))) sdram
   
   .ack(sdram_ack),
   .valid(sdram_valid),
-  .q(sdram_q),
+  .q(),
 
   // SDRAM interface
   .sdram_a(SDRAM_A),
@@ -1985,6 +2006,10 @@ snk68_ss snk68_ss (
     .ovr_hit        ( ss_ovr_hit ),
     .ovr_data       ( ss_ovr_data ),
     .z80_m1_n       ( M1_n ),
+    .z80_mreq_n     ( MREQ_n ),
+    .z80_nmi_n      ( z80_nmi_n ),
+    .z80_cen        ( clk_4M & run_z80 ),
+    .z80_din        ( z80_din ),
     .z_hold         ( ss_z_hold ),
     .z_reset        ( ss_z_reset ),
     .z_dirset       ( ss_z_dirset ),
@@ -2029,6 +2054,7 @@ wire [7:0] opl_rp_d;
 
 snk68_opl_shadow #(.SS_IDX(8)) ss_opl (
     .clk      ( clk_sys ),
+    .reset    ( reset ),
     .ssbus    ( ssb[8] ),
     .snoop_wr ( opl_cs & opl_wr ),
     .snoop_a  ( opl_a ),
